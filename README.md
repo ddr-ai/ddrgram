@@ -1,5 +1,7 @@
 # Telegram Video Browser
 
+**Live:** [https://ddr-ai.github.io/ddrgram/](https://ddr-ai.github.io/ddrgram/)
+
 A mobile-first web app that signs in with your Telegram account, lets you search and join public channels and groups, keeps a curated local watchlist, and plays Telegram-hosted video files in a full-width grid.
 
 This is not a messenger. There is no composer, DMs, GIFs, or round video notes.
@@ -42,3 +44,11 @@ VITE_TELEGRAM_API_HASH
 If those are missing, the login screen collects them and stores them locally.
 
 Tests never call live Telegram. They run against a mock port.
+
+## GitHub Pages
+
+Repo **Settings → Pages → Build and deployment**
+
+- Source: **GitHub Actions** (workflow `.github/workflows/pages.yml`)
+
+The site is a static SPA (`base` `/ddrgram/`, hash routes) so refresh works without server rewrites. Optional repo secrets `VITE_TELEGRAM_API_ID` and `VITE_TELEGRAM_API_HASH` bake credentials into the build; otherwise paste them on first launch.
