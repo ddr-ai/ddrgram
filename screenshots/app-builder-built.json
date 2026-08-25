@@ -1,0 +1,38 @@
+{
+  "url": "http://127.0.0.1:8081/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Telegram Video Browser",
+      "hasCanvas": false,
+      "bodyTextLen": 294,
+      "bodyTextHash": "ad51b2f3ff618e0a0d050ed8ce89103ddd923dadfe75c12189e78d70d4d7071b",
+      "bodyTextPrefix": "TG Videos Sign in with your Telegram account to browse channel a",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Telegram Video Browser",
+      "hasCanvas": false,
+      "bodyTextLen": 294,
+      "bodyTextHash": "ad51b2f3ff618e0a0d050ed8ce89103ddd923dadfe75c12189e78d70d4d7071b",
+      "bodyTextPrefix": "TG Videos Sign in with your Telegram account to browse channel a",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-built.json",
+  "divergesFromBaseline": false,
+  "baselineReasons": []
+}

@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>og</title>
+  <style>
+    @font-face {
+      font-family: Outfit;
+      font-weight: 500;
+      src: url("og-fonts/Outfit-500.ttf") format("truetype");
+    }
+    @font-face {
+      font-family: Outfit;
+      font-weight: 600;
+      src: url("og-fonts/Outfit-600.ttf") format("truetype");
+    }
+    @font-face {
+      font-family: Outfit;
+      font-weight: 700;
+      src: url("og-fonts/Outfit-700.ttf") format("truetype");
+    }
+
+    html, body {
+      margin: 0;
+      width: 1200px;
+      height: 630px;
+      overflow: hidden;
+      background: #0b0c0e;
+    }
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: Outfit, "Liberation Sans", Arial, sans-serif;
+      color: #eceef2;
+      position: relative;
+    }
+
+    .shelf {
+      position: absolute;
+      inset: 40px 32px 40px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      z-index: 1;
+    }
+
+    .row {
+      display: flex;
+      gap: 14px;
+      flex: 1;
+    }
+
+    .tile {
+      flex: 1;
+      border-radius: 12px;
+      position: relative;
+      overflow: hidden;
+      background: #14161b;
+      box-shadow:
+        0 10px 28px rgba(0, 0, 0, 0.5),
+        inset 0 0 0 1px rgba(236, 238, 242, 0.055);
+    }
+
+    .still {
+      position: absolute;
+      inset: 0;
+    }
+
+    .play-ghost {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 26px;
+      height: 26px;
+      transform: translate(-42%, -50%);
+      opacity: 0.18;
+    }
+
+    .play-ghost path { fill: #eceef2; }
+
+    .tile.lit {
+      box-shadow:
+        0 10px 28px rgba(0, 0, 0, 0.5),
+        inset 0 0 0 1px rgba(42, 171, 238, 0.42);
+    }
+
+    .tile.lit .play-ghost { opacity: 1; }
+    .tile.lit .play-ghost path { fill: #2AABEE; }
+
+    .dur {
+      position: absolute;
+      right: 9px;
+      bottom: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: #eceef2;
+      background: rgba(11, 12, 14, 0.72);
+      padding: 2px 7px;
+      border-radius: 4px;
+    }
+
+    .vignette {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      background:
+        radial-gradient(ellipse 54% 58% at 50% 48%,
+          rgba(11, 12, 14, 0.18) 0%,
+          rgba(11, 12, 14, 0.72) 58%,
+          rgba(11, 12, 14, 0.94) 100%);
+      pointer-events: none;
+    }
+
+    .grain {
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      opacity: 0.05;
+    }
+
+    .lockup {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+    }
+
+    .mark {
+      width: 72px;
+      height: 72px;
+      margin-bottom: 22px;
+      filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.45));
+    }
+
+    h1 {
+      margin: 0;
+      padding: 0;
+      font-size: 78px;
+      font-weight: 700;
+      letter-spacing: 0.055em;
+      line-height: 1;
+      color: #eceef2;
+      text-align: center;
+      text-shadow: 0 6px 28px rgba(0, 0, 0, 0.65);
+    }
+
+    h1 small {
+      display: block;
+      margin-top: 16px;
+      font-size: 34px;
+      font-weight: 600;
+      letter-spacing: 0.34em;
+      color: #eceef2;
+      padding-left: 0.34em;
+    }
+
+    .rule {
+      width: 72px;
+      height: 3px;
+      border-radius: 2px;
+      background: #2AABEE;
+      margin: 20px 0 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="shelf" aria-hidden="true">
+    <div class="row">
+      <div class="tile">
+        <div class="still" style="background: linear-gradient(165deg, #1a222c 0%, #12151a 55%, #0e1014 100%);"></div>
+        <svg class="play-ghost" viewBox="0 0 32 32"><path d="M12 8.5v15L25 16z"/></svg>
+        <span class="dur">12:40</span>
+      </div>
+      <div class="tile">
+        <div class="still" style="background: linear-gradient(20deg, #14181f 0%, #1c2430 40%, #101318 100%);"></div>
+        <svg class="play-ghost" viewBox="0 0 32 32"><path d="M12 8.5v15L25 16z"/></svg>
+        <span class="dur">04:12</span>
+      </div>
+      <div class="tile lit">
+        <div class="still" style="background: linear-gradient(180deg, #163044 0%, #101820 60%, #0c1014 100%);"></div>
+        <svg class="play-ghost" viewBox="0 0 32 32"><path d="M12 8.5v15L25 16z"/></svg>
+        <span class="dur">08:17</span>
+      </div>
+      <div class="tile">
+        <div class="still" style="background: linear-gradient(210deg, #1b1f26 0%, #14161b 50%, #0f1216 100%);"></div>
+        <svg class="play-ghost" viewBox="0 0 32 32"><path d="M12 8.5v15L25 16z"/></svg>
+        <span class="dur">21:03</span>
+      </div>
+    </div>
+    <div class="row">
+      <div class="tile">
+        <div class="still" style="background: linear-gradient(90deg, #10141a 0%, #1a2028 50%, #12161c 100%);"></div>
+        <svg class="play-ghost" viewBox="0 0 32 32"><path d="M12 8.5v15L25 16z"/></svg>
+        <span class="dur">00:47</span>
+      </div>
+      <div class="tile">
+        <div class="still" style="background: linear-gradient(140deg, #181c24 0%, #101318 70%, #0c0e12 100%);"></div>
+        <svg class="play-ghost" viewBox="0 0 32 32"><path d="M12 8.5v15L25 16z"/></svg>
+        <span class="dur">15:22</span>
+      </div>
+      <div class="tile">
+        <div class="still" style="background: linear-gradient(40deg, #151a22 0%, #0f1318 100%);"></div>
+        <svg class="play-ghost" viewBox="0 0 32 32"><path d="M12 8.5v15L25 16z"/></svg>
+        <span class="dur">06:09</span>
+      </div>
+      <div class="tile">
+        <div class="still" style="background: linear-gradient(200deg, #1a2430 0%, #12161c 55%, #0d1014 100%);"></div>
+        <svg class="play-ghost" viewBox="0 0 32 32"><path d="M12 8.5v15L25 16z"/></svg>
+        <span class="dur">33:18</span>
+      </div>
+    </div>
+    <div class="row">
+      <div class="tile">
+        <div class="still" style="background: linear-gradient(175deg, #161c24 0%, #10141a 100%);"></div>
+        <svg class="play-ghost" viewBox="0 0 32 32"><path d="M12 8.5v15L25 16z"/></svg>
+        <span class="dur">02:54</span>
+      </div>
+      <div class="tile">
+        <div class="still" style="background: linear-gradient(15deg, #1c2834 0%, #12181e 60%, #0e1216 100%);"></div>
+        <svg class="play-ghost" viewBox="0 0 32 32"><path d="M12 8.5v15L25 16z"/></svg>
+        <span class="dur">19:41</span>
+      </div>
+      <div class="tile">
+        <div class="still" style="background: linear-gradient(250deg, #14181e 0%, #1a1e26 45%, #101318 100%);"></div>
+        <svg class="play-ghost" viewBox="0 0 32 32"><path d="M12 8.5v15L25 16z"/></svg>
+        <span class="dur">07:21</span>
+      </div>
+      <div class="tile">
+        <div class="still" style="background: linear-gradient(110deg, #10151c 0%, #18222c 50%, #0c1014 100%);"></div>
+        <svg class="play-ghost" viewBox="0 0 32 32"><path d="M12 8.5v15L25 16z"/></svg>
+        <span class="dur">11:05</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="vignette"></div>
+
+  <div class="lockup">
+    <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+      <rect width="32" height="32" rx="8" fill="#14161b"/>
+      <rect x="4.5" y="7.5" width="23" height="17" rx="3" fill="none" stroke="#2AABEE" stroke-width="2"/>
+      <path d="M13 12v8l7.2-4z" fill="#2AABEE"/>
+    </svg>
+    <h1>TELEGRAM<small>VIDEO BROWSER</small></h1>
+    <div class="rule"></div>
+  </div>
+
+  <svg class="grain" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+    <filter id="n">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="4" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+    <rect width="100%" height="100%" filter="url(#n)"/>
+  </svg>
+</body>
+</html>
