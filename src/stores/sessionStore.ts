@@ -3,17 +3,24 @@ import { openDb } from "./db";
 const SESSION_KEY = "session";
 const API_KEY = "api";
 
+export function asSessionString(raw: unknown): string | null {
+  if (typeof raw === "string" && raw.length > 0) return raw;
+  return null;
+}
+
 export async function saveSessionString(s: string): Promise<void> {
+  const text = asSessionString(s);
+  if (!text) return;
   const db = await openDb();
-  await db.put("kv", { key: SESSION_KEY, value: s });
+  await db.put("kv", { key: SESSION_KEY, value: text });
 }
 
 export async function loadSessionString(): Promise<string | null> {
   const db = await openDb();
   const row = (await db.get("kv", SESSION_KEY)) as
-    | { key: string; value: string }
+    | { key: string; value: unknown }
     | undefined;
-  return row?.value ?? null;
+  return asSessionString(row?.value);
 }
 
 export async function clearSessionString(): Promise<void> {

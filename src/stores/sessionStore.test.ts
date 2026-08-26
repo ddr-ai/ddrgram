@@ -18,4 +18,10 @@ describe("sessionStore", () => {
     await clearSessionString();
     expect(await loadSessionString()).toBeNull();
   });
+
+  it("ignores non-string session values", async () => {
+    const db = await (await import("./db")).openDb();
+    await db.put("kv", { key: "session", value: { nested: true } });
+    expect(await loadSessionString()).toBeNull();
+  });
 });

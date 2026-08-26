@@ -141,24 +141,30 @@ export function createTeleprotoPort(creds: Creds): TelegramPort {
 
   async function ensureClient(session = ""): Promise<TelegramClient> {
     if (client) return client;
-    const c = new TelegramClient(new StringSession(session), creds.apiId, creds.apiHash, {
-      connectionRetries: 5,
-      floodSleepThreshold: 0,
-      networkSocket: PromisedWebSockets,
-      deviceModel: "TG Videos",
-      systemVersion: "Web",
-      appVersion: "0.1.0",
-      langCode: "en",
-      systemLangCode: "en",
-    });
+    const sessionText = typeof session === "string" ? session : "";
+    const c = new TelegramClient(
+      new StringSession(sessionText),
+      Number(creds.apiId),
+      String(creds.apiHash),
+      {
+        connectionRetries: 5,
+        floodSleepThreshold: 0,
+        networkSocket: PromisedWebSockets,
+        deviceModel: "TG Videos",
+        systemVersion: "Web",
+        appVersion: "0.1.0",
+        langCode: "en",
+        systemLangCode: "en",
+      },
+    );
     client = c;
     return c;
   }
 
   async function persistSession() {
     if (!client) return;
-    const saved = client.session.save() as unknown as string;
-    if (saved) await saveSessionString(saved);
+    const saved = client.session.save();
+    if (typeof saved === "string" && saved.length > 0) await saveSessionString(saved);
   }
 
   const port: TelegramPort = {

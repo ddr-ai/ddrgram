@@ -105,6 +105,35 @@ function ssrNodeBuiltinsExternal(): Plugin {
   };
 }
 
+/** teleproto's serializeBytes only accepts Node Buffer/string. Rolldown can
+ *  hand it a Uint8Array from a second Buffer copy, which throws
+ *  "Bytes or str expected, not object" during connect/login. */
+function teleprotoSerializeBytesPlugin(): Plugin {
+  return {
+    name: "teleproto-serialize-bytes",
+    enforce: "pre",
+    transform(code, id) {
+      const norm = id.replace(/\\/g, "/");
+      if (!norm.includes("teleproto/tl/runtime/helpers")) return;
+      if (!code.includes("Bytes or str expected")) return;
+      const next = code.replace(
+        "if (!(data instanceof Buffer)) {\n        if (typeof data === \"string\") {\n            data = Buffer.from(data);\n        }\n        else {\n            throw new Error(`Bytes or str expected, not ${typeof data}`);\n        }\n    }",
+        `if (!(typeof Buffer !== "undefined" && (typeof Buffer.isBuffer === "function" ? Buffer.isBuffer(data) : data instanceof Buffer))) {
+        if (typeof data === "string") {
+            data = Buffer.from(data);
+        } else if (data instanceof Uint8Array || (typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView(data))) {
+            data = Buffer.from(data);
+        } else {
+            throw new Error(\`Bytes or str expected, not \${typeof data}\`);
+        }
+    }`,
+      );
+      if (next === code) return;
+      return { code: next, map: null };
+    },
+  };
+}
+
 function clientNodePolyfills(): Plugin[] {
   return [
     ssrNodeBuiltinsExternal(),
@@ -275,6 +304,7 @@ export default defineConfig(({ command, isPreview }) => ({
     },
   },
   plugins: [
+    teleprotoSerializeBytesPlugin(),
     ...clientNodePolyfills(),
     pgliteBootstrapPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
