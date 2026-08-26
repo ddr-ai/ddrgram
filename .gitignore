@@ -1,9 +1,10 @@
 node_modules/
 dist/
 .output/
-.vercel/output/
+.vercel/
 .project_id
 .github_repo
+.agents/
 .env
 .env.*
 !.env.example

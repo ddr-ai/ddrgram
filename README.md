@@ -49,7 +49,7 @@ Tests never call live Telegram or live Neon. They run against a mock port and in
 
 After Telegram login the watchlist is stored in Neon (Vercel). Videos stay in this browser’s IndexedDB (newest 50 prefetched).
 
-Live (Vercel): [https://ddrgram.vercel.app](https://ddrgram.vercel.app). Set `DATABASE_URL` (Neon pooled connection string) on the Vercel project so watchlist sync persists. Without it the app still runs, but cloud watchlist writes are ephemeral. GitHub Pages remains a static fallback and does not sync the watchlist.
+Live (Vercel): [https://ddrgram.vercel.app](https://ddrgram.vercel.app). Watchlist sync uses Neon Postgres provisioned through the Vercel Marketplace (`DATABASE_URL` on Production, Preview, and Development). Local preview without that env falls back to PGLite. GitHub Pages remains a static fallback and does not sync the watchlist.
 
 Identity is the Telegram user id from `getMe()`. Video files and the Telegram session never leave the device.
 
