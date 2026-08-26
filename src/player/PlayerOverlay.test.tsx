@@ -5,6 +5,7 @@ import { AppError } from "@/telegram/errors";
 import { createMockPort } from "@/telegram/mockPort";
 import { TelegramProvider } from "@/telegram/TelegramProvider";
 import type { VideoItem } from "@/telegram/types";
+import { putCachedVideo } from "@/stores/videoCacheStore";
 import { PlayerOverlay } from "./PlayerOverlay";
 
 function video(msgId: number): VideoItem {
@@ -85,5 +86,30 @@ describe("PlayerOverlay", () => {
       </TelegramProvider>,
     );
     await waitFor(() => expect(screen.getByTestId("grid-keep")).toBeTruthy());
+  });
+
+  it("cache hit does not call downloadVideo", async () => {
+    const download = vi.fn(async () => new Blob(["from-port"]));
+    await putCachedVideo({
+      peerId: "p",
+      msgId: 3,
+      blob: new Blob(["cached"], { type: "video/mp4" }),
+      sizeBytes: 6,
+      cachedAt: Date.now(),
+    });
+    const port = createMockPort({ downloadVideo: download });
+    render(
+      <TelegramProvider port={port} configured>
+        <PlayerOverlay
+          items={[video(3)]}
+          currentMsgId={3}
+          peer={{ peerId: "p", accessHash: "h" }}
+          onClose={() => {}}
+          onChangeMsgId={() => {}}
+        />
+      </TelegramProvider>,
+    );
+    await waitFor(() => expect(document.querySelector("video")).toBeTruthy());
+    expect(download).not.toHaveBeenCalled();
   });
 });

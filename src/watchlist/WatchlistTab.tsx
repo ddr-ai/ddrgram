@@ -13,10 +13,11 @@ import { parseTelegramError } from "@/telegram/errors";
 import { useTelegram } from "@/telegram/TelegramProvider";
 import type { WatchlistItem } from "@/telegram/types";
 import { toast } from "@/ui/Toast";
+import { pushMuted, pushRemove } from "./syncClient";
 import { JoinedPicker } from "./JoinedPicker";
 
 export function WatchlistTab() {
-  const { port } = useTelegram();
+  const { port, me } = useTelegram();
   const navigate = useNavigate();
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [picker, setPicker] = useState(false);
@@ -31,6 +32,7 @@ export function WatchlistTab() {
 
   async function remove(item: WatchlistItem) {
     await removeFromWatchlist(item.peerId);
+    void pushRemove(me?.id ?? "", item.peerId);
     await reload();
     toast("Removed from watchlist");
   }
@@ -55,6 +57,7 @@ export function WatchlistTab() {
       if (item.muted) await port.unmute(item);
       else await port.mute(item);
       await updateWatchlistMuted(item.peerId, nextMuted);
+      void pushMuted(me?.id ?? "", item.peerId, nextMuted);
     } catch (err) {
       await reload();
       toast.error(parseTelegramError(err).message);

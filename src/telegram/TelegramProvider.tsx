@@ -18,6 +18,8 @@ import {
   saveApiCredentials,
 } from "../stores/sessionStore";
 import { clearWatchlist } from "../stores/watchlistStore";
+import { flushOfflineQueue, syncWatchlist } from "../watchlist/syncClient";
+import { startPrefetchForWatchlist } from "../videos/prefetch";
 
 type Status = "booting" | "needs_config" | "anon" | "ready";
 
@@ -124,6 +126,26 @@ export function TelegramProvider({
       cancelled = true;
     };
   }, [portProp, configuredProp]);
+
+  useEffect(() => {
+    if (status !== "ready" || !me) return;
+    let cancelled = false;
+    void (async () => {
+      const items = await syncWatchlist(me.id);
+      if (cancelled) return;
+      await flushOfflineQueue(me.id);
+      if (cancelled || !port) return;
+      void startPrefetchForWatchlist(items, port);
+    })();
+    const onOnline = () => {
+      void flushOfflineQueue(me.id);
+    };
+    window.addEventListener("online", onOnline);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("online", onOnline);
+    };
+  }, [status, me, port]);
 
   const saveCredentials = useCallback(async (apiId: number, apiHash: string) => {
     await saveApiCredentials({ apiId, apiHash });

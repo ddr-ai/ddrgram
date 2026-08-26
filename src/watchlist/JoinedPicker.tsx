@@ -8,6 +8,8 @@ import { parseTelegramError } from "@/telegram/errors";
 import { useTelegram } from "@/telegram/TelegramProvider";
 import type { JoinedChat, WatchlistItem } from "@/telegram/types";
 import { toast } from "@/ui/Toast";
+import { startPrefetchForPeer } from "@/videos/prefetch";
+import { pushUpsert } from "./syncClient";
 
 export function JoinedPicker({
   open,
@@ -18,7 +20,7 @@ export function JoinedPicker({
   onOpenChange: (open: boolean) => void;
   onAdded: () => void;
 }) {
-  const { port } = useTelegram();
+  const { port, me } = useTelegram();
   const [chats, setChats] = useState<JoinedChat[]>([]);
   const [filter, setFilter] = useState("");
   const [added, setAdded] = useState<Set<string>>(new Set());
@@ -73,6 +75,8 @@ export function JoinedPicker({
     setAdded((s) => new Set(s).add(chat.peerId));
     onAdded();
     toast.success("Added to watchlist");
+    void pushUpsert(me?.id ?? "", item);
+    if (port) void startPrefetchForPeer(item, port);
   }
 
   return (

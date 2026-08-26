@@ -2,9 +2,11 @@ import { ChevronLeft, Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { neighborMsgIds, revokeObjectUrl } from "./playerIndex";
+import { getCachedVideo, putCachedVideoWithEviction } from "@/stores/videoCacheStore";
 import { parseTelegramError } from "@/telegram/errors";
 import { useTelegram } from "@/telegram/TelegramProvider";
 import type { VideoItem, WatchlistItem } from "@/telegram/types";
+import { toast } from "@/ui/Toast";
 
 export function PlayerOverlay({
   items,
@@ -50,11 +52,16 @@ export function PlayerOverlay({
       try {
         let blob = cache.current.get(current.msgId);
         if (!blob) {
+          const disk = await getCachedVideo(peer.peerId, current.msgId);
+          blob = disk?.blob;
+        }
+        if (!blob) {
           blob = await port.downloadVideo(current.document, (ratio) => {
             if (!cancelled) setProgress(ratio);
           });
-          cache.current.set(current.msgId, blob);
+          void persistCache(current.msgId, blob);
         }
+        cache.current.set(current.msgId, blob);
         if (cancelled) return;
         const url = URL.createObjectURL(blob);
         setObjectUrl((prev) => {
@@ -71,13 +78,31 @@ export function PlayerOverlay({
         if (!cancelled) setBusy(false);
       }
     }
+    async function persistCache(msgId: number, blob: Blob) {
+      const result = await putCachedVideoWithEviction({
+        peerId: peer.peerId,
+        msgId,
+        blob,
+        sizeBytes: blob.size,
+        cachedAt: Date.now(),
+      });
+      if (result === "evicted" || result === "full") {
+        toast("storage full, dropped old cache");
+      }
+    }
     async function prefetch(msgId: number | null) {
       if (!port || msgId == null || cache.current.has(msgId)) return;
       const item = items.find((v) => v.msgId === msgId);
       if (!item) return;
       try {
+        const disk = await getCachedVideo(peer.peerId, msgId);
+        if (disk) {
+          if (!cancelled) cache.current.set(msgId, disk.blob);
+          return;
+        }
         const blob = await port.downloadVideo(item.document);
         if (!cancelled) cache.current.set(msgId, blob);
+        void persistCache(msgId, blob);
       } catch {
         // prefetch is best-effort
       }

@@ -9,13 +9,15 @@ import { AppError, parseTelegramError } from "@/telegram/errors";
 import { useTelegram } from "@/telegram/TelegramProvider";
 import type { SearchHit, WatchlistItem } from "@/telegram/types";
 import { toast } from "@/ui/Toast";
+import { startPrefetchForPeer } from "@/videos/prefetch";
+import { pushUpsert } from "@/watchlist/syncClient";
 
 export function SearchTab({
   addItem = addToWatchlist,
 }: {
   addItem?: (item: WatchlistItem) => Promise<void>;
 }) {
-  const { port } = useTelegram();
+  const { port, me } = useTelegram();
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [busy, setBusy] = useState(false);
@@ -113,8 +115,11 @@ export function SearchTab({
 
   async function add(hit: SearchHit) {
     try {
-      await addItem(hitToWatchlistItem(hit, Date.now()));
+      const item = hitToWatchlistItem(hit, Date.now());
+      await addItem(item);
       toast.success("Added to watchlist");
+      void pushUpsert(me?.id ?? "", item);
+      if (port) void startPrefetchForPeer(item, port);
     } catch (err) {
       toast.error(err instanceof AppError ? err.message : "Could not add");
     }

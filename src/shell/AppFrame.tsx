@@ -39,7 +39,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
           <div className="w-full max-w-sm rounded-2xl bg-surface p-5 shadow-[var(--shadow-border)]">
             <h2 className="font-display text-lg font-semibold">Log out?</h2>
             <p className="mt-2 text-sm text-muted text-pretty">
-              Your watchlist stays on this device unless you clear it.
+              Your watchlist stays unless you clear it.
             </p>
             <div className="mt-5 flex flex-col gap-2">
               <Button

@@ -2,7 +2,7 @@
 
 **Live:** [https://ddr-ai.github.io/ddrgram/](https://ddr-ai.github.io/ddrgram/)
 
-A mobile-first web app that signs in with your Telegram account, lets you search and join public channels and groups, keeps a curated local watchlist, and plays Telegram-hosted video files in a full-width grid.
+A mobile-first web app that signs in with your Telegram account, lets you search and join public channels and groups, keeps a curated watchlist, and plays Telegram-hosted video files in a full-width grid.
 
 This is not a messenger. There is no composer, DMs, GIFs, or round video notes.
 
@@ -12,11 +12,11 @@ This is not a messenger. There is no composer, DMs, GIFs, or round video notes.
 2. Open the app. If credentials were not baked in at build time, paste them on the first screen. They stay in this browser only.
 3. Enter your phone number. Telegram sends a login code. If your account uses two-step verification, email, or a captcha, the app will ask.
 
-The session lives in IndexedDB on this device. A new browser must sign in again. Logging out keeps the watchlist unless you choose to clear it.
+The Telegram session lives in IndexedDB on this device. A new browser must sign in again. The watchlist syncs after login. Logging out keeps the watchlist unless you choose to clear it.
 
 ## Use
 
-- **Search** public channels/groups or paste `t.me` / invite links. **Join** and **Add** are separate: Join changes Telegram membership; Add only writes the local watchlist.
+- **Search** public channels/groups or paste `t.me` / invite links. **Join** and **Add** are separate: Join changes Telegram membership; Add writes the watchlist (local + synced).
 - **Watchlist** is curated. Tap a row to open its videos. **+** adds from chats you already joined. Row menu: Remove (local), Leave (Telegram), Mute / Unmute.
 - **Videos** appears only after a watchlist item is selected. Grid is `inputMessagesFilterVideo` only. Tap a cell to play; Back restores scroll.
 
@@ -43,7 +43,15 @@ VITE_TELEGRAM_API_HASH
 
 If those are missing, the login screen collects them and stores them locally.
 
-Tests never call live Telegram. They run against a mock port.
+Tests never call live Telegram or live Neon. They run against a mock port and in-memory maps.
+
+## Watchlist sync
+
+After Telegram login the watchlist is stored in Neon (Vercel). Videos stay in this browser’s IndexedDB (newest 50 prefetched).
+
+Live (Vercel): set the project build command to `npm run build:vercel` and enable the database so `DATABASE_URL` is injected. Preview uses PGLite automatically. GitHub Pages remains a static fallback and does not sync the watchlist.
+
+Identity is the Telegram user id from `getMe()`. Video files and the Telegram session never leave the device.
 
 ## GitHub Pages
 
