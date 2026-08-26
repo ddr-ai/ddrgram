@@ -245,7 +245,8 @@ function authPopupPlugin(): Plugin {
 // The dev server starts once `src/router.tsx` and `src/routes/` exist — see
 // AGENTS.md § "First scaffold".
 export default defineConfig(({ command, isPreview }) => ({
-  base: "/ddrgram/",
+  // GitHub Pages is served under /ddrgram/; Vercel is the site root.
+  base: process.env.VERCEL ? "/" : "/ddrgram/",
   server: {
     host: "0.0.0.0",
     port: 8080,

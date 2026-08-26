@@ -1,6 +1,6 @@
 # Telegram Video Browser
 
-**Live:** [https://ddr-ai.github.io/ddrgram/](https://ddr-ai.github.io/ddrgram/)
+**Live:** [https://ddrgram.vercel.app](https://ddrgram.vercel.app) · Pages fallback: [https://ddr-ai.github.io/ddrgram/](https://ddr-ai.github.io/ddrgram/)
 
 A mobile-first web app that signs in with your Telegram account, lets you search and join public channels and groups, keeps a curated watchlist, and plays Telegram-hosted video files in a full-width grid.
 
@@ -49,7 +49,7 @@ Tests never call live Telegram or live Neon. They run against a mock port and in
 
 After Telegram login the watchlist is stored in Neon (Vercel). Videos stay in this browser’s IndexedDB (newest 50 prefetched).
 
-Live (Vercel): set the project build command to `npm run build:vercel` and enable the database so `DATABASE_URL` is injected. Preview uses PGLite automatically. GitHub Pages remains a static fallback and does not sync the watchlist.
+Live (Vercel): [https://ddrgram.vercel.app](https://ddrgram.vercel.app). Set `DATABASE_URL` (Neon pooled connection string) on the Vercel project so watchlist sync persists. Without it the app still runs, but cloud watchlist writes are ephemeral. GitHub Pages remains a static fallback and does not sync the watchlist.
 
 Identity is the Telegram user id from `getMe()`. Video files and the Telegram session never leave the device.
 
