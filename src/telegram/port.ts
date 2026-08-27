@@ -2,6 +2,7 @@ import type { JoinedChat, Me, SearchHit, VideoItem, WatchlistItem } from "./type
 
 export type LoginStart = { phone: string };
 export type VideoPage = { videos: VideoItem[]; nextOffset: string | null };
+export type SearchPage = { hits: SearchHit[]; nextOffset: string | null };
 
 export type AuthNext =
   | { next: "done" }
@@ -24,7 +25,8 @@ export interface TelegramPort {
   submitCaptcha(token: string): Promise<{ next: "code" | "done" }>;
   logout(): Promise<void>;
   getMe(): Promise<Me>;
-  searchPublic(query: string): Promise<SearchHit[]>;
+  searchPublic(query: string, offset?: string): Promise<SearchPage>;
+  countVideos(peer: Pick<WatchlistItem, "peerId" | "accessHash">): Promise<number | null>;
   previewInvite(hash: string): Promise<SearchHit>;
   joinInvite(hash: string): Promise<{ pending: boolean }>;
   joinByUsername(username: string): Promise<{ pending: boolean }>;

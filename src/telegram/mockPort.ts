@@ -61,7 +61,10 @@ export function createMockPort(overrides: Partial<TelegramPort> = {}): TelegramP
       return me;
     },
     async searchPublic() {
-      return [] as SearchHit[];
+      return { hits: [] as SearchHit[], nextOffset: null };
+    },
+    async countVideos() {
+      return 0;
     },
     async previewInvite() {
       throw new AppError("invalid_invite", "INVITE_HASH_EXPIRED");

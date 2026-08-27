@@ -29,7 +29,7 @@ describe("SearchTab", () => {
     const joinByUsername = vi.fn(async () => ({ pending: false }));
     const addItem = vi.fn();
     const port = createMockPort({
-      searchPublic: async () => [hit],
+      searchPublic: async () => ({ hits: [hit], nextOffset: null }),
       joinByUsername,
     });
     renderSearch(port, addItem);
@@ -47,7 +47,7 @@ describe("SearchTab", () => {
     const joinInvite = vi.fn();
     const addItem = vi.fn();
     const port = createMockPort({
-      searchPublic: async () => [hit],
+      searchPublic: async () => ({ hits: [hit], nextOffset: null }),
       joinByUsername,
       joinChannel,
       joinInvite,
@@ -86,7 +86,7 @@ describe("SearchTab", () => {
   it("pending join shows pending approval and is not treated as joined", async () => {
     const user = userEvent.setup();
     const port = createMockPort({
-      searchPublic: async () => [hit],
+      searchPublic: async () => ({ hits: [hit], nextOffset: null }),
       joinByUsername: async () => ({ pending: true }),
     });
     renderSearch(port);
@@ -94,5 +94,72 @@ describe("SearchTab", () => {
     expect(await screen.findByText("Cats")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Join" }));
     expect(await screen.findByText("pending approval")).toBeTruthy();
+  });
+
+  it("shows a video icon and the uploaded video count as a result loads", async () => {
+    const user = userEvent.setup();
+    const countVideos = vi.fn(async () => 128);
+    const port = createMockPort({
+      searchPublic: async () => ({ hits: [hit], nextOffset: null }),
+      countVideos,
+    });
+    renderSearch(port);
+    await user.type(screen.getByLabelText("Search"), "cats");
+    expect(await screen.findByText("Cats")).toBeTruthy();
+    await waitFor(() => expect(countVideos).toHaveBeenCalled());
+    expect(await screen.findByLabelText("128 videos")).toBeTruthy();
+    expect(screen.getByText("128")).toBeTruthy();
+  });
+
+  it("loads further pages as the list is scrolled, closest matches first", async () => {
+    const user = userEvent.setup();
+    const io = { cb: null as IntersectionObserverCallback | null };
+    const Original = globalThis.IntersectionObserver;
+    globalThis.IntersectionObserver = class {
+      constructor(cb: IntersectionObserverCallback) {
+        io.cb = cb;
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
+      root = null;
+      rootMargin = "";
+      thresholds: number[] = [];
+    } as unknown as typeof IntersectionObserver;
+
+    const later: SearchHit = {
+      ...hit,
+      peerId: "1002",
+      title: "Cat Clips",
+      username: "catclips",
+    };
+    const searchPublic = vi.fn(async (_q: string, offset?: string) => {
+      if (offset) return { hits: [later], nextOffset: null };
+      return { hits: [hit], nextOffset: "1" };
+    });
+    try {
+      const port = createMockPort({
+        searchPublic,
+        countVideos: async () => 3,
+      });
+      renderSearch(port);
+      await user.type(screen.getByLabelText("Search"), "cats");
+      expect(await screen.findByText("Cats")).toBeTruthy();
+      await waitFor(() => expect(searchPublic).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(io.cb).toBeTruthy());
+      if (!io.cb) throw new Error("IntersectionObserver was not constructed");
+      io.cb(
+        [{ isIntersecting: true } as IntersectionObserverEntry],
+        {} as IntersectionObserver,
+      );
+      expect(await screen.findByText("Cat Clips")).toBeTruthy();
+      expect(searchPublic).toHaveBeenCalledWith("cats", "1");
+      expect(screen.getByText("Cats")).toBeTruthy();
+    } finally {
+      globalThis.IntersectionObserver = Original;
+    }
   });
 });

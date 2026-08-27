@@ -3,13 +3,18 @@ import { StringSession } from "teleproto/sessions";
 import { PromisedWebSockets } from "teleproto/extensions";
 import bigInt from "big-integer";
 import { AppError, parseTelegramError } from "./errors";
-import type { TelegramPort, VideoPage } from "./port";
+import type { SearchPage, TelegramPort, VideoPage } from "./port";
 import type { ChatKind, JoinedChat, Me, SearchHit, VideoItem, WatchlistItem } from "./types";
 import {
   clearSessionString,
   loadSessionString,
   saveSessionString,
 } from "../stores/sessionStore";
+import {
+  buildSearchSources,
+  rankHits,
+  type SearchSource,
+} from "../search/queryPlan";
 
 type Creds = { apiId: number; apiHash: string };
 
@@ -45,10 +50,12 @@ function kindOfChannel(chat: Api.Channel): ChatKind {
 }
 
 function mapChat(chat: Api.TypeChat): Omit<SearchHit, "membership"> | null {
-  if (chat instanceof Api.Channel && !chat.min) {
+  if (chat instanceof Api.Channel) {
+    const accessHash = String(chat.accessHash ?? "0");
+    if (chat.min && !chat.username && accessHash === "0") return null;
     return {
       peerId: String(chat.id),
-      accessHash: String(chat.accessHash ?? "0"),
+      accessHash,
       username: chat.username,
       title: chat.title,
       kind: kindOfChannel(chat),
@@ -65,6 +72,95 @@ function mapChat(chat: Api.TypeChat): Omit<SearchHit, "membership"> | null {
     };
   }
   return null;
+}
+
+function peerKey(peer: Api.TypePeer): string | null {
+  if (peer instanceof Api.PeerChannel) return String(peer.channelId);
+  if (peer instanceof Api.PeerChat) return String(peer.chatId);
+  return null;
+}
+
+function hitsFromChats(chats: Api.TypeChat[] | undefined, seen: Set<string>): SearchHit[] {
+  const hits: SearchHit[] = [];
+  for (const chat of chats ?? []) {
+    const mapped = mapChat(chat);
+    if (!mapped || seen.has(mapped.peerId)) continue;
+    seen.add(mapped.peerId);
+    hits.push({ ...mapped, membership: "unknown" });
+  }
+  return hits;
+}
+
+function hitsFromFound(
+  res: { myResults?: Api.TypePeer[]; results?: Api.TypePeer[]; chats?: Api.TypeChat[] },
+  seen: Set<string>,
+): SearchHit[] {
+  const byId = new Map<string, Api.TypeChat>();
+  for (const chat of res.chats ?? []) {
+    if (chat instanceof Api.Channel || chat instanceof Api.Chat) {
+      byId.set(String(chat.id), chat);
+    }
+  }
+  const hits: SearchHit[] = [];
+  for (const peer of [...(res.myResults ?? []), ...(res.results ?? [])]) {
+    const id = peerKey(peer);
+    if (!id || seen.has(id)) continue;
+    const chat = byId.get(id);
+    if (!chat) continue;
+    const mapped = mapChat(chat);
+    if (!mapped) continue;
+    seen.add(id);
+    hits.push({ ...mapped, membership: "unknown" });
+  }
+  hits.push(...hitsFromChats(res.chats, seen));
+  return hits;
+}
+
+function inputPeerFromMessagePeer(
+  peer: Api.TypePeer,
+  chats: Api.TypeChat[],
+): Api.TypeInputPeer {
+  if (peer instanceof Api.PeerChannel) {
+    const ch = chats.find(
+      (c) => c instanceof Api.Channel && String(c.id) === String(peer.channelId),
+    );
+    if (ch instanceof Api.Channel && ch.accessHash) {
+      return new Api.InputPeerChannel({
+        channelId: ch.id,
+        accessHash: ch.accessHash,
+      });
+    }
+  }
+  if (peer instanceof Api.PeerChat) {
+    return new Api.InputPeerChat({ chatId: peer.chatId });
+  }
+  return new Api.InputPeerEmpty();
+}
+
+type GlobalCursor = {
+  offsetRate: number;
+  offsetPeer: Api.TypeInputPeer;
+  offsetId: number;
+};
+
+type PublicSearchSession = {
+  query: string;
+  sources: SearchSource[];
+  sourceIndex: number;
+  seen: Set<string>;
+  global: GlobalCursor;
+  firstPage: boolean;
+};
+
+const SEARCH_PAGE_TARGET = 16;
+const SEARCH_MAX_STEPS = 10;
+
+function freshGlobalCursor(): GlobalCursor {
+  return {
+    offsetRate: 0,
+    offsetPeer: new Api.InputPeerEmpty(),
+    offsetId: 0,
+  };
 }
 
 function toInputPeer(peer: Pick<WatchlistItem, "peerId" | "accessHash">): Api.TypeInputPeer {
@@ -129,6 +225,9 @@ export function createTeleprotoPort(creds: Creds): TelegramPort {
     siteKey?: string;
   }>();
   let loginRunning = false;
+  let publicSearch: PublicSearchSession | null = null;
+  let countActive = 0;
+  const countWaiters: Array<() => void> = [];
 
   function resetGates() {
     codeGate = deferred();
@@ -355,18 +454,150 @@ export function createTeleprotoPort(creds: Creds): TelegramPort {
       });
     },
 
-    async searchPublic(query: string) {
+    async searchPublic(query: string, offset?: string) {
       return wrap(async () => {
+        const q = query.trim();
+        if (!q) return { hits: [], nextOffset: null } satisfies SearchPage;
         const c = await ensureClient();
-        const res = await c.api.contacts.search({ q: query, limit: 20 });
-        const chats = res.chats ?? [];
-        const hits: SearchHit[] = [];
-        for (const chat of chats) {
-          const mapped = mapChat(chat);
-          if (mapped) hits.push({ ...mapped, membership: "unknown" });
+        const continuing = Boolean(offset) && publicSearch?.query === q;
+        if (!continuing) {
+          publicSearch = {
+            query: q,
+            sources: buildSearchSources(q),
+            sourceIndex: 0,
+            seen: new Set<string>(),
+            global: freshGlobalCursor(),
+            firstPage: true,
+          };
         }
-        return hits;
+        const session = publicSearch;
+        if (!session) return { hits: [], nextOffset: null } satisfies SearchPage;
+
+        const batch: SearchHit[] = [];
+        let steps = 0;
+        const first = session.firstPage;
+        session.firstPage = false;
+
+        while (steps < SEARCH_MAX_STEPS && session.sourceIndex < session.sources.length) {
+          const source = session.sources[session.sourceIndex];
+          if (!source) break;
+          steps++;
+
+          if (source.type === "contacts") {
+            try {
+              const res = await c.api.contacts.search({ q: source.q, limit: 50 });
+              const found = hitsFromFound(res, session.seen);
+              batch.push(...found);
+            } catch (err) {
+              const parsed = parseTelegramError(err);
+              if (parsed.code !== "unknown" && parsed.code !== "flood_wait") throw parsed;
+              if (parsed.code === "flood_wait") throw parsed;
+            }
+            session.sourceIndex++;
+            if (first && batch.length > 0) break;
+            if (batch.length >= SEARCH_PAGE_TARGET) break;
+            continue;
+          }
+
+          try {
+            const res = await c.api.messages.searchGlobal({
+              q: source.q,
+              filter: { _: "inputMessagesFilterEmpty" },
+              minDate: 0,
+              maxDate: 0,
+              offsetRate: session.global.offsetRate,
+              offsetPeer: session.global.offsetPeer,
+              offsetId: session.global.offsetId,
+              limit: 30,
+              broadcastsOnly: source.broadcastsOnly,
+              groupsOnly: source.groupsOnly,
+            });
+            const chats = "chats" in res ? res.chats : [];
+            const messages = "messages" in res && Array.isArray(res.messages) ? res.messages : [];
+            batch.push(...hitsFromChats(chats, session.seen));
+            const lastMsg = [...messages]
+              .reverse()
+              .find((m): m is Api.Message => m instanceof Api.Message);
+            const exhausted = messages.length < 30 || !lastMsg;
+            if (exhausted) {
+              session.sourceIndex++;
+              session.global = freshGlobalCursor();
+            } else {
+              const nextRate =
+                "nextRate" in res && typeof res.nextRate === "number"
+                  ? res.nextRate
+                  : lastMsg.date;
+              session.global = {
+                offsetRate: nextRate ?? lastMsg.date,
+                offsetPeer: inputPeerFromMessagePeer(lastMsg.peerId, chats),
+                offsetId: lastMsg.id,
+              };
+            }
+          } catch (err) {
+            const parsed = parseTelegramError(err);
+            if (parsed.code === "flood_wait") throw parsed;
+            session.sourceIndex++;
+            session.global = freshGlobalCursor();
+          }
+          if (batch.length >= SEARCH_PAGE_TARGET) break;
+        }
+
+        const hits = first ? batch : rankHits(q, batch);
+        const nextOffset =
+          session.sourceIndex < session.sources.length ? String(session.sourceIndex) : null;
+        return { hits, nextOffset } satisfies SearchPage;
       });
+    },
+
+    async countVideos(peer) {
+      if (!/^-?\d+$/.test(peer.peerId)) return null;
+      const run = async (): Promise<number | null> => {
+        const c = await ensureClient();
+        const fetchCount = async () => {
+          const res = await c.api.messages.search({
+            peer: toInputPeer(peer),
+            q: "",
+            filter: { _: "inputMessagesFilterVideo" },
+            minDate: 0,
+            maxDate: 0,
+            offsetId: 0,
+            addOffset: 0,
+            limit: 1,
+            maxId: 0,
+            minId: 0,
+            hash: bigInt(0),
+          });
+          if ("count" in res && typeof res.count === "number") return res.count;
+          if ("messages" in res && Array.isArray(res.messages)) return res.messages.length;
+          return 0;
+        };
+        try {
+          return await fetchCount();
+        } catch (err) {
+          const parsed = parseTelegramError(err);
+          if (parsed.code === "flood_wait" && parsed.waitSeconds && parsed.waitSeconds <= 5) {
+            await new Promise((r) => setTimeout(r, parsed.waitSeconds! * 1000));
+            try {
+              return await fetchCount();
+            } catch {
+              return null;
+            }
+          }
+          return null;
+        }
+      };
+      if (countActive >= 2) {
+        await new Promise<void>((resolve) => {
+          countWaiters.push(resolve);
+        });
+      }
+      countActive++;
+      try {
+        return await run();
+      } finally {
+        countActive--;
+        countWaiters.shift()?.();
+      }
     },
 
     async previewInvite(hash: string) {
