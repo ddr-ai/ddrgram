@@ -1,10 +1,21 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import {
+  Outlet,
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from "@tanstack/react-router";
 import { describe, expect, it, vi } from "vitest";
+import { AppFrame } from "@/shell/AppFrame";
 import { createMockPort } from "@/telegram/mockPort";
 import { TelegramProvider } from "@/telegram/TelegramProvider";
 import type { SearchHit } from "@/telegram/types";
+import { ChannelView } from "./ChannelView";
 import { SearchTab } from "./SearchTab";
+import { stashSearchHit } from "./searchHits";
 
 const hit: SearchHit = {
   peerId: "1001",
@@ -15,12 +26,55 @@ const hit: SearchHit = {
   membership: "unknown",
 };
 
-function renderSearch(port: ReturnType<typeof createMockPort>, addItem = vi.fn()) {
-  return render(
-    <TelegramProvider port={port} configured>
-      <SearchTab addItem={addItem} />
-    </TelegramProvider>,
-  );
+function renderSearch(
+  port: ReturnType<typeof createMockPort>,
+  addItem = vi.fn(),
+  addOtherItem = vi.fn(),
+) {
+  const rootRoute = createRootRoute({
+    component: () => (
+      <TelegramProvider port={port} configured>
+        <AppFrame>
+          <Outlet />
+        </AppFrame>
+      </TelegramProvider>
+    ),
+  });
+  const search = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/search",
+    component: SearchTab,
+  });
+  const channel = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/search/$peerId",
+    component: function Channel() {
+      const { peerId } = channel.useParams();
+      return (
+        <ChannelView peerId={peerId} addItem={addItem} addOtherItem={addOtherItem} />
+      );
+    },
+  });
+  const watchlist = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/watchlist",
+    component: () => <div>watchlist</div>,
+  });
+  const other = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/other",
+    component: () => <div>other</div>,
+  });
+  const login = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/login",
+    component: () => <div>login</div>,
+  });
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([search, channel, watchlist, other, login]),
+    history: createMemoryHistory({ initialEntries: ["/search"] }),
+  });
+  return { ...render(<RouterProvider router={router} />), router, addItem, addOtherItem };
 }
 
 describe("SearchTab", () => {
@@ -33,34 +87,101 @@ describe("SearchTab", () => {
       joinByUsername,
     });
     renderSearch(port, addItem);
-    await user.type(screen.getByLabelText("Search"), "cats");
+    await user.type(
+      await screen.findByPlaceholderText("Search, @username, or t.me link"),
+      "cats",
+    );
     expect(await screen.findByText("Cats")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Join" }));
     expect(joinByUsername).toHaveBeenCalled();
     expect(addItem).not.toHaveBeenCalled();
   });
 
-  it("Add does not join", async () => {
+  it("opening a result shows channel content and add buttons", async () => {
     const user = userEvent.setup();
     const joinByUsername = vi.fn();
-    const joinChannel = vi.fn();
-    const joinInvite = vi.fn();
     const addItem = vi.fn();
     const port = createMockPort({
       searchPublic: async () => ({ hits: [hit], nextOffset: null }),
       joinByUsername,
-      joinChannel,
-      joinInvite,
+      searchVideos: async () => ({
+        videos: [
+          {
+            msgId: 1,
+            peerId: "1001",
+            date: 1,
+            sizeBytes: 10,
+            document: {},
+            durationSec: 4,
+          },
+        ],
+        nextOffset: null,
+      }),
+      searchFiles: async () => ({
+        files: [
+          {
+            msgId: 2,
+            peerId: "1001",
+            date: 1,
+            name: "notes.txt",
+            ext: "txt",
+            mime: "text/plain",
+            sizeBytes: 12,
+            kind: "document",
+            media: {},
+          },
+        ],
+        nextOffset: null,
+      }),
     });
-    renderSearch(port, addItem);
-    await user.type(screen.getByLabelText("Search"), "cats");
+    const { router } = renderSearch(port, addItem);
+    await user.type(
+      await screen.findByPlaceholderText("Search, @username, or t.me link"),
+      "cats",
+    );
     expect(await screen.findByText("Cats")).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "Add to" }));
-    await user.click(await screen.findByRole("menuitem", { name: "Watchlist" }));
+    await user.click(screen.getByRole("button", { name: "Open Cats" }));
+    expect(router.state.location.pathname).toBe("/search/1001");
+    expect(await screen.findByRole("button", { name: "Add to Watchlist" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add to Other" })).toBeTruthy();
+    expect(await screen.findByText("notes.txt")).toBeTruthy();
+  });
+
+  it("Add to Watchlist from the channel does not join", async () => {
+    const user = userEvent.setup();
+    const joinByUsername = vi.fn();
+    const joinChannel = vi.fn();
+    const addItem = vi.fn();
+    stashSearchHit(hit);
+    const port = createMockPort({
+      joinByUsername,
+      joinChannel,
+      searchVideos: async () => ({ videos: [], nextOffset: null }),
+      searchFiles: async () => ({ files: [], nextOffset: null }),
+    });
+    const rootRoute = createRootRoute({
+      component: () => (
+        <TelegramProvider port={port} configured>
+          <Outlet />
+        </TelegramProvider>
+      ),
+    });
+    const channel = createRoute({
+      getParentRoute: () => rootRoute,
+      path: "/search/$peerId",
+      component: () => (
+        <ChannelView peerId="1001" addItem={addItem} />
+      ),
+    });
+    const router = createRouter({
+      routeTree: rootRoute.addChildren([channel]),
+      history: createMemoryHistory({ initialEntries: ["/search/1001"] }),
+    });
+    render(<RouterProvider router={router} />);
+    await user.click(await screen.findByRole("button", { name: "Add to Watchlist" }));
     expect(addItem).toHaveBeenCalledTimes(1);
     expect(joinByUsername).not.toHaveBeenCalled();
     expect(joinChannel).not.toHaveBeenCalled();
-    expect(joinInvite).not.toHaveBeenCalled();
   });
 
   it("empty query does not call searchPublic", async () => {
@@ -68,7 +189,10 @@ describe("SearchTab", () => {
     const searchPublic = vi.fn();
     const port = createMockPort({ searchPublic });
     renderSearch(port);
-    await user.type(screen.getByLabelText("Search"), "   ");
+    await user.type(
+      await screen.findByPlaceholderText("Search, @username, or t.me link"),
+      "   ",
+    );
     await new Promise((r) => setTimeout(r, 400));
     expect(searchPublic).not.toHaveBeenCalled();
   });
@@ -79,7 +203,10 @@ describe("SearchTab", () => {
     const previewInvite = vi.fn(async () => ({ ...hit, title: "Invite Club" }));
     const port = createMockPort({ searchPublic, previewInvite });
     renderSearch(port);
-    await user.type(screen.getByLabelText("Search"), "https://t.me/+AbCdEf123");
+    await user.type(
+      await screen.findByPlaceholderText("Search, @username, or t.me link"),
+      "https://t.me/+AbCdEf123",
+    );
     await waitFor(() => expect(previewInvite).toHaveBeenCalledWith("AbCdEf123"));
     expect(searchPublic).not.toHaveBeenCalled();
   });
@@ -91,30 +218,46 @@ describe("SearchTab", () => {
       joinByUsername: async () => ({ pending: true }),
     });
     renderSearch(port);
-    await user.type(screen.getByLabelText("Search"), "cats");
+    await user.type(
+      await screen.findByPlaceholderText("Search, @username, or t.me link"),
+      "cats",
+    );
     expect(await screen.findByText("Cats")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Join" }));
     expect(await screen.findByText("pending approval")).toBeTruthy();
   });
 
-  it("Add to Other does not join or add to the watchlist", async () => {
+  it("Add to Other from the channel does not join or add to the watchlist", async () => {
     const user = userEvent.setup();
     const joinByUsername = vi.fn();
     const addItem = vi.fn();
     const addOtherItem = vi.fn();
+    stashSearchHit(hit);
     const port = createMockPort({
-      searchPublic: async () => ({ hits: [hit], nextOffset: null }),
       joinByUsername,
+      searchVideos: async () => ({ videos: [], nextOffset: null }),
+      searchFiles: async () => ({ files: [], nextOffset: null }),
     });
-    render(
-      <TelegramProvider port={port} configured>
-        <SearchTab addItem={addItem} addOtherItem={addOtherItem} />
-      </TelegramProvider>,
-    );
-    await user.type(screen.getByLabelText("Search"), "cats");
-    expect(await screen.findByText("Cats")).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "Add to" }));
-    await user.click(await screen.findByRole("menuitem", { name: "Other" }));
+    const rootRoute = createRootRoute({
+      component: () => (
+        <TelegramProvider port={port} configured>
+          <Outlet />
+        </TelegramProvider>
+      ),
+    });
+    const channel = createRoute({
+      getParentRoute: () => rootRoute,
+      path: "/search/$peerId",
+      component: () => (
+        <ChannelView peerId="1001" addItem={addItem} addOtherItem={addOtherItem} />
+      ),
+    });
+    const router = createRouter({
+      routeTree: rootRoute.addChildren([channel]),
+      history: createMemoryHistory({ initialEntries: ["/search/1001"] }),
+    });
+    render(<RouterProvider router={router} />);
+    await user.click(await screen.findByRole("button", { name: "Add to Other" }));
     expect(addOtherItem).toHaveBeenCalledTimes(1);
     expect(addItem).not.toHaveBeenCalled();
     expect(joinByUsername).not.toHaveBeenCalled();
@@ -128,7 +271,10 @@ describe("SearchTab", () => {
       countVideos,
     });
     renderSearch(port);
-    await user.type(screen.getByLabelText("Search"), "cats");
+    await user.type(
+      await screen.findByPlaceholderText("Search, @username, or t.me link"),
+      "cats",
+    );
     expect(await screen.findByText("Cats")).toBeTruthy();
     await waitFor(() => expect(countVideos).toHaveBeenCalled());
     expect(await screen.findByLabelText("128 videos")).toBeTruthy();
@@ -170,7 +316,10 @@ describe("SearchTab", () => {
         countVideos: async () => 3,
       });
       renderSearch(port);
-      await user.type(screen.getByLabelText("Search"), "cats");
+      await user.type(
+      await screen.findByPlaceholderText("Search, @username, or t.me link"),
+      "cats",
+    );
       expect(await screen.findByText("Cats")).toBeTruthy();
       await waitFor(() => expect(searchPublic).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(io.cb).toBeTruthy());

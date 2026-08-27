@@ -17,6 +17,7 @@ import { AppError, parseTelegramError } from "@/telegram/errors";
 import { useTelegram } from "@/telegram/TelegramProvider";
 import type { FileItem, FileKind, WatchlistItem } from "@/telegram/types";
 import { toast } from "@/ui/Toast";
+import { FilePreview } from "./FilePreview";
 
 type ListState = {
   items: FileItem[];
@@ -72,6 +73,7 @@ export function FilesTab({
   const [error, setError] = useState<AppError | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [progress, setProgress] = useState<Record<number, number>>({});
+  const [preview, setPreview] = useState<FileItem | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
 
@@ -155,14 +157,17 @@ export function FilesTab({
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-4 py-3 md:px-6">
+    <div className="relative flex h-full flex-col">
+      <div
+        ref={scroller}
+        hidden={preview != null}
+        className="min-h-0 flex-1 overflow-y-auto px-4 py-3 md:px-6"
+      >
         <h1 className="mb-3 font-display text-lg font-semibold tracking-tight">
           {peer?.title ?? "Files"}
         </h1>
         <p className="mb-4 text-xs text-muted text-pretty">
-          Downloads go to this device’s Downloads folder (laptop Downloads, or Files on
-          iPhone).
+          Tap a file to open it. Save puts a copy in this device’s Downloads folder.
         </p>
         {error?.code === "private_chat" ? (
           <p className="text-sm text-muted text-pretty">
@@ -183,11 +188,19 @@ export function FilesTab({
               file.kind === "folder"
                 ? `Download ${file.children?.length ?? 0} files`
                 : `Download ${file.name}`;
+            const viewLabel =
+              file.kind === "folder" ? `View ${file.name}` : `View ${file.name}`;
             return (
               <li
                 key={`${file.kind}-${file.msgId}`}
                 className="raised-card flex items-center gap-3 rounded-2xl bg-surface p-3"
               >
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                  aria-label={viewLabel}
+                  onClick={() => setPreview(file)}
+                >
                 <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-muted">
                   <Icon className="size-5" aria-hidden />
                 </span>
@@ -201,6 +214,7 @@ export function FilesTab({
                     ) : null}
                   </p>
                 </div>
+                </button>
                 <Button
                   size="sm"
                   aria-label={label}
@@ -219,6 +233,14 @@ export function FilesTab({
           <p className="py-2 text-center text-xs text-muted">Loading more…</p>
         ) : null}
       </div>
+      {preview ? (
+        <FilePreview
+          file={preview}
+          port={port}
+          onClose={() => setPreview(null)}
+          saveFile={saveFile}
+        />
+      ) : null}
     </div>
   );
 }

@@ -1,50 +1,20 @@
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { ChevronDown, Users, Video } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
+import { Users, Video } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatCount, hueFromId, initials } from "@/lib/format";
 import { parseTelegramLink } from "@/parse/telegramLink";
-import { hitToWatchlistItem } from "./searchHits";
-import { addToOtherlist } from "@/stores/otherStore";
-import { addToWatchlist } from "@/stores/watchlistStore";
-import { AppError, parseTelegramError } from "@/telegram/errors";
+import { stashSearchHit } from "./searchHits";
+import { parseTelegramError } from "@/telegram/errors";
 import { useTelegram } from "@/telegram/TelegramProvider";
-import type { SearchHit, WatchlistItem } from "@/telegram/types";
+import type { SearchHit } from "@/telegram/types";
 import { toast } from "@/ui/Toast";
-import { startPrefetchForPeer } from "@/videos/prefetch";
 import { usePeerVideoCounts } from "@/videos/usePeerVideoCounts";
-import { pushUpsert } from "@/watchlist/syncClient";
 
-function tiltCard(event: PointerEvent<HTMLLIElement>) {
-  if (event.pointerType !== "mouse") return;
-  if (
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  ) {
-    return;
-  }
-  const el = event.currentTarget;
-  const rect = el.getBoundingClientRect();
-  const x = (event.clientX - rect.left) / rect.width - 0.5;
-  const y = (event.clientY - rect.top) / rect.height - 0.5;
-  el.style.setProperty("--tilt-x", `${(-y * 7).toFixed(2)}deg`);
-  el.style.setProperty("--tilt-y", `${(x * 9).toFixed(2)}deg`);
-}
-
-function untiltCard(event: PointerEvent<HTMLLIElement>) {
-  event.currentTarget.style.setProperty("--tilt-x", "0deg");
-  event.currentTarget.style.setProperty("--tilt-y", "0deg");
-}
-
-export function SearchTab({
-  addItem = addToWatchlist,
-  addOtherItem = addToOtherlist,
-}: {
-  addItem?: (item: WatchlistItem) => Promise<void>;
-  addOtherItem?: (item: WatchlistItem) => Promise<void>;
-}) {
-  const { port, me } = useTelegram();
+export function SearchTab() {
+  const { port } = useTelegram();
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [busy, setBusy] = useState(false);
@@ -210,21 +180,9 @@ export function SearchTab({
     }
   }
 
-  async function add(hit: SearchHit, dest: "watchlist" | "other") {
-    try {
-      const item = hitToWatchlistItem(hit, Date.now());
-      if (dest === "other") {
-        await addOtherItem(item);
-        toast.success("Added to Other");
-        return;
-      }
-      await addItem(item);
-      toast.success("Added to watchlist");
-      void pushUpsert(me?.id ?? "", item);
-      if (port) void startPrefetchForPeer(item, port);
-    } catch (err) {
-      toast.error(err instanceof AppError ? err.message : "Could not add");
-    }
+  function openHit(hit: SearchHit) {
+    stashSearchHit(hit);
+    void navigate({ to: "/search/$peerId", params: { peerId: hit.peerId } });
   }
 
   return (
@@ -243,8 +201,8 @@ export function SearchTab({
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6">
         {!query.trim() ? (
           <p className="text-sm text-muted text-pretty">
-            Search public channels and groups, or paste an invite link. Join is
-            separate from adding. Add to Watchlist for videos, or Other for files.
+            Search public channels and groups, or paste an invite link. Tap a
+            result to open it, then add it to Watchlist or Other.
           </p>
         ) : null}
         {busy && hits.length === 0 ? (
@@ -268,9 +226,13 @@ export function SearchTab({
               <li
                 key={hit.peerId}
                 className="search-card flex items-center gap-3 rounded-2xl bg-surface p-3 md:gap-4 md:p-4"
-                onPointerMove={tiltCard}
-                onPointerLeave={untiltCard}
               >
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                  aria-label={`Open ${hit.title}`}
+                  onClick={() => openHit(hit)}
+                >
                 <span
                   className="search-avatar flex size-12 shrink-0 items-center justify-center rounded-xl text-xs font-semibold md:size-14"
                   style={{
@@ -309,6 +271,7 @@ export function SearchTab({
                     <p className="mt-1.5 text-xs text-muted">pending approval</p>
                   ) : null}
                 </div>
+                </button>
                 <div className="flex shrink-0 flex-col gap-1.5">
                   <Button
                     size="sm"
@@ -318,34 +281,6 @@ export function SearchTab({
                   >
                     Join
                   </Button>
-                  <DropdownMenu.Root>
-                    <DropdownMenu.Trigger asChild>
-                      <Button size="sm" aria-label="Add to">
-                        Add to
-                        <ChevronDown className="size-3.5" aria-hidden />
-                      </Button>
-                    </DropdownMenu.Trigger>
-                    <DropdownMenu.Portal>
-                      <DropdownMenu.Content
-                        className="z-50 min-w-40 rounded-xl bg-surface-2 p-1 shadow-[var(--shadow-raised)]"
-                        sideOffset={6}
-                        align="end"
-                      >
-                        <DropdownMenu.Item
-                          className="flex min-h-10 cursor-pointer items-center rounded-lg px-3 text-sm outline-none data-[highlighted]:bg-surface"
-                          onSelect={() => void add(hit, "watchlist")}
-                        >
-                          Watchlist
-                        </DropdownMenu.Item>
-                        <DropdownMenu.Item
-                          className="flex min-h-10 cursor-pointer items-center rounded-lg px-3 text-sm outline-none data-[highlighted]:bg-surface"
-                          onSelect={() => void add(hit, "other")}
-                        >
-                          Other
-                        </DropdownMenu.Item>
-                      </DropdownMenu.Content>
-                    </DropdownMenu.Portal>
-                  </DropdownMenu.Root>
                 </div>
               </li>
             );

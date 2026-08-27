@@ -78,4 +78,26 @@ describe("FilesTab", () => {
     await waitFor(() => expect(downloadFile).toHaveBeenCalled());
     expect(saveFile).toHaveBeenCalledWith(blob, "notes.pdf");
   });
+
+  it("opens the file so its contents can be read", async () => {
+    const user = userEvent.setup();
+    const code: FileItem = {
+      ...file,
+      msgId: 11,
+      name: "app.py",
+      ext: "py",
+      mime: "text/x-python",
+      kind: "code",
+    };
+    const blob = new Blob(["print('hello')\n"], { type: "text/plain" });
+    const port = createMockPort({
+      searchFiles: async () => ({ files: [code], nextOffset: null }),
+      downloadFile: async () => blob,
+    });
+    renderFiles(port);
+    expect(await screen.findByText("app.py")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "View app.py" }));
+    expect(await screen.findByText(/print\('hello'\)/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Back" })).toBeTruthy();
+  });
 });

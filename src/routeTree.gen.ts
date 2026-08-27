@@ -13,6 +13,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppSearchRouteImport } from './routes/_app/search'
+import { Route as AppSearchIndexRouteImport } from './routes/_app/search.index'
+import { Route as AppSearchPeerIdRouteImport } from './routes/_app/search.$peerId'
 import { Route as AppWatchlistRouteImport } from './routes/_app/watchlist'
 import { Route as AppWatchlistIndexRouteImport } from './routes/_app/watchlist.index'
 import { Route as AppWatchlistPeerIdRouteImport } from './routes/_app/watchlist.$peerId'
@@ -38,6 +40,16 @@ const AppSearchRoute = AppSearchRouteImport.update({
   id: '/search',
   path: '/search',
   getParentRoute: () => AppRoute,
+} as any)
+const AppSearchIndexRoute = AppSearchIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppSearchRoute,
+} as any)
+const AppSearchPeerIdRoute = AppSearchPeerIdRouteImport.update({
+  id: '/$peerId',
+  path: '/$peerId',
+  getParentRoute: () => AppSearchRoute,
 } as any)
 const AppWatchlistRoute = AppWatchlistRouteImport.update({
   id: '/watchlist',
@@ -73,7 +85,9 @@ const AppOtherPeerIdRoute = AppOtherPeerIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/search': typeof AppSearchRoute
+  '/search': typeof AppSearchRouteWithChildren
+  '/search/$peerId': typeof AppSearchPeerIdRoute
+  '/search/': typeof AppSearchIndexRoute
   '/watchlist': typeof AppWatchlistRouteWithChildren
   '/watchlist/$peerId': typeof AppWatchlistPeerIdRoute
   '/watchlist/': typeof AppWatchlistIndexRoute
@@ -84,7 +98,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/search': typeof AppSearchRoute
+  '/search/$peerId': typeof AppSearchPeerIdRoute
+  '/search': typeof AppSearchIndexRoute
   '/watchlist/$peerId': typeof AppWatchlistPeerIdRoute
   '/watchlist': typeof AppWatchlistIndexRoute
   '/other/$peerId': typeof AppOtherPeerIdRoute
@@ -95,7 +110,9 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
-  '/_app/search': typeof AppSearchRoute
+  '/_app/search': typeof AppSearchRouteWithChildren
+  '/_app/search/$peerId': typeof AppSearchPeerIdRoute
+  '/_app/search/': typeof AppSearchIndexRoute
   '/_app/watchlist': typeof AppWatchlistRouteWithChildren
   '/_app/watchlist/$peerId': typeof AppWatchlistPeerIdRoute
   '/_app/watchlist/': typeof AppWatchlistIndexRoute
@@ -109,6 +126,8 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/search'
+    | '/search/$peerId'
+    | '/search/'
     | '/watchlist'
     | '/watchlist/$peerId'
     | '/watchlist/'
@@ -116,13 +135,15 @@ export interface FileRouteTypes {
     | '/other/$peerId'
     | '/other/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/search' | '/watchlist/$peerId' | '/watchlist' | '/other/$peerId' | '/other'
+  to: '/' | '/login' | '/search/$peerId' | '/search' | '/watchlist/$peerId' | '/watchlist' | '/other/$peerId' | '/other'
   id:
     | '__root__'
     | '/'
     | '/_app'
     | '/login'
     | '/_app/search'
+    | '/_app/search/$peerId'
+    | '/_app/search/'
     | '/_app/watchlist'
     | '/_app/watchlist/$peerId'
     | '/_app/watchlist/'
@@ -166,6 +187,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/search'
       preLoaderRoute: typeof AppSearchRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/_app/search/': {
+      id: '/_app/search/'
+      path: '/'
+      fullPath: '/search/'
+      preLoaderRoute: typeof AppSearchIndexRouteImport
+      parentRoute: typeof AppSearchRoute
+    }
+    '/_app/search/$peerId': {
+      id: '/_app/search/$peerId'
+      path: '/$peerId'
+      fullPath: '/search/$peerId'
+      preLoaderRoute: typeof AppSearchPeerIdRouteImport
+      parentRoute: typeof AppSearchRoute
     }
     '/_app/watchlist': {
       id: '/_app/watchlist'
@@ -212,6 +247,20 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppSearchRouteChildren {
+  AppSearchPeerIdRoute: typeof AppSearchPeerIdRoute
+  AppSearchIndexRoute: typeof AppSearchIndexRoute
+}
+
+const AppSearchRouteChildren: AppSearchRouteChildren = {
+  AppSearchPeerIdRoute: AppSearchPeerIdRoute,
+  AppSearchIndexRoute: AppSearchIndexRoute,
+}
+
+const AppSearchRouteWithChildren = AppSearchRoute._addFileChildren(
+  AppSearchRouteChildren,
+)
+
 interface AppWatchlistRouteChildren {
   AppWatchlistPeerIdRoute: typeof AppWatchlistPeerIdRoute
   AppWatchlistIndexRoute: typeof AppWatchlistIndexRoute
@@ -241,13 +290,13 @@ const AppOtherRouteWithChildren = AppOtherRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
-  AppSearchRoute: typeof AppSearchRoute
+  AppSearchRoute: typeof AppSearchRouteWithChildren
   AppWatchlistRoute: typeof AppWatchlistRouteWithChildren
   AppOtherRoute: typeof AppOtherRouteWithChildren
 }
 
 const AppRouteChildren: AppRouteChildren = {
-  AppSearchRoute: AppSearchRoute,
+  AppSearchRoute: AppSearchRouteWithChildren,
   AppWatchlistRoute: AppWatchlistRouteWithChildren,
   AppOtherRoute: AppOtherRouteWithChildren,
 }

@@ -1,7 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { SearchTab } from "@/search/SearchTab";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_app/search")({
   ssr: false,
-  component: SearchTab,
+  component: () => <Outlet />,
 });
+
