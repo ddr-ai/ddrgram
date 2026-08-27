@@ -55,7 +55,8 @@ describe("SearchTab", () => {
     renderSearch(port, addItem);
     await user.type(screen.getByLabelText("Search"), "cats");
     expect(await screen.findByText("Cats")).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "Add" }));
+    await user.click(screen.getByRole("button", { name: "Add to" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Watchlist" }));
     expect(addItem).toHaveBeenCalledTimes(1);
     expect(joinByUsername).not.toHaveBeenCalled();
     expect(joinChannel).not.toHaveBeenCalled();
@@ -94,6 +95,29 @@ describe("SearchTab", () => {
     expect(await screen.findByText("Cats")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Join" }));
     expect(await screen.findByText("pending approval")).toBeTruthy();
+  });
+
+  it("Add to Other does not join or add to the watchlist", async () => {
+    const user = userEvent.setup();
+    const joinByUsername = vi.fn();
+    const addItem = vi.fn();
+    const addOtherItem = vi.fn();
+    const port = createMockPort({
+      searchPublic: async () => ({ hits: [hit], nextOffset: null }),
+      joinByUsername,
+    });
+    render(
+      <TelegramProvider port={port} configured>
+        <SearchTab addItem={addItem} addOtherItem={addOtherItem} />
+      </TelegramProvider>,
+    );
+    await user.type(screen.getByLabelText("Search"), "cats");
+    expect(await screen.findByText("Cats")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Add to" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Other" }));
+    expect(addOtherItem).toHaveBeenCalledTimes(1);
+    expect(addItem).not.toHaveBeenCalled();
+    expect(joinByUsername).not.toHaveBeenCalled();
   });
 
   it("shows a video icon and the uploaded video count as a result loads", async () => {

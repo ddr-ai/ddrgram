@@ -1,10 +1,12 @@
-import { Users, Video } from "lucide-react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { ChevronDown, Users, Video } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatCount, hueFromId, initials } from "@/lib/format";
 import { parseTelegramLink } from "@/parse/telegramLink";
 import { hitToWatchlistItem } from "./searchHits";
+import { addToOtherlist } from "@/stores/otherStore";
 import { addToWatchlist } from "@/stores/watchlistStore";
 import { AppError, parseTelegramError } from "@/telegram/errors";
 import { useTelegram } from "@/telegram/TelegramProvider";
@@ -37,8 +39,10 @@ function untiltCard(event: PointerEvent<HTMLLIElement>) {
 
 export function SearchTab({
   addItem = addToWatchlist,
+  addOtherItem = addToOtherlist,
 }: {
   addItem?: (item: WatchlistItem) => Promise<void>;
+  addOtherItem?: (item: WatchlistItem) => Promise<void>;
 }) {
   const { port, me } = useTelegram();
   const [query, setQuery] = useState("");
@@ -206,9 +210,14 @@ export function SearchTab({
     }
   }
 
-  async function add(hit: SearchHit) {
+  async function add(hit: SearchHit, dest: "watchlist" | "other") {
     try {
       const item = hitToWatchlistItem(hit, Date.now());
+      if (dest === "other") {
+        await addOtherItem(item);
+        toast.success("Added to Other");
+        return;
+      }
       await addItem(item);
       toast.success("Added to watchlist");
       void pushUpsert(me?.id ?? "", item);
@@ -234,8 +243,8 @@ export function SearchTab({
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6">
         {!query.trim() ? (
           <p className="text-sm text-muted text-pretty">
-            Search public channels and groups, or paste an invite link. Join and Add
-            are separate — adding does not join.
+            Search public channels and groups, or paste an invite link. Join is
+            separate from adding. Add to Watchlist for videos, or Other for files.
           </p>
         ) : null}
         {busy && hits.length === 0 ? (
@@ -309,9 +318,34 @@ export function SearchTab({
                   >
                     Join
                   </Button>
-                  <Button size="sm" onClick={() => void add(hit)}>
-                    Add
-                  </Button>
+                  <DropdownMenu.Root>
+                    <DropdownMenu.Trigger asChild>
+                      <Button size="sm" aria-label="Add to">
+                        Add to
+                        <ChevronDown className="size-3.5" aria-hidden />
+                      </Button>
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Portal>
+                      <DropdownMenu.Content
+                        className="z-50 min-w-40 rounded-xl bg-surface-2 p-1 shadow-[var(--shadow-raised)]"
+                        sideOffset={6}
+                        align="end"
+                      >
+                        <DropdownMenu.Item
+                          className="flex min-h-10 cursor-pointer items-center rounded-lg px-3 text-sm outline-none data-[highlighted]:bg-surface"
+                          onSelect={() => void add(hit, "watchlist")}
+                        >
+                          Watchlist
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item
+                          className="flex min-h-10 cursor-pointer items-center rounded-lg px-3 text-sm outline-none data-[highlighted]:bg-surface"
+                          onSelect={() => void add(hit, "other")}
+                        >
+                          Other
+                        </DropdownMenu.Item>
+                      </DropdownMenu.Content>
+                    </DropdownMenu.Portal>
+                  </DropdownMenu.Root>
                 </div>
               </li>
             );

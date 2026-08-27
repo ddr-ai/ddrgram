@@ -17,6 +17,7 @@ import {
   loadApiCredentials,
   saveApiCredentials,
 } from "../stores/sessionStore";
+import { clearOtherlist } from "../stores/otherStore";
 import { clearWatchlist } from "../stores/watchlistStore";
 import { flushOfflineQueue, syncWatchlist } from "../watchlist/syncClient";
 import { startPrefetchForWatchlist } from "../videos/prefetch";
@@ -180,7 +181,10 @@ export function TelegramProvider({
       } else {
         await clearSessionString();
       }
-      if (alsoClearWatchlist) await clearWatchlist();
+      if (alsoClearWatchlist) {
+        await clearWatchlist();
+        await clearOtherlist();
+      }
       setMe(null);
       setStatus(configured ? "anon" : "needs_config");
     },

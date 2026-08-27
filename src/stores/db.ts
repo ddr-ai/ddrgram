@@ -18,6 +18,10 @@ export type TgDb = IDBPDatabase<{
     key: string;
     value: import("../telegram/types").WatchlistItem;
   };
+  otherlist: {
+    key: string;
+    value: import("../telegram/types").WatchlistItem;
+  };
   kv: {
     key: string;
     value: KvRecord;
@@ -36,7 +40,7 @@ export function openDb(): Promise<IDBPDatabase> {
     return Promise.reject(new Error("IndexedDB is not available"));
   }
   if (!dbPromise) {
-    dbPromise = openDB(DB_NAME, 2, {
+    dbPromise = openDB(DB_NAME, 3, {
       upgrade(db, oldVersion) {
         if (oldVersion < 1) {
           if (!db.objectStoreNames.contains("watchlist")) {
@@ -49,6 +53,9 @@ export function openDb(): Promise<IDBPDatabase> {
         if (oldVersion < 2 && !db.objectStoreNames.contains("videoCache")) {
           const store = db.createObjectStore("videoCache", { keyPath: "id" });
           store.createIndex("cachedAt", "cachedAt");
+        }
+        if (oldVersion < 3 && !db.objectStoreNames.contains("otherlist")) {
+          db.createObjectStore("otherlist", { keyPath: "peerId" });
         }
       },
     });

@@ -3,6 +3,7 @@ import { Drawer } from "vaul";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { hueFromId, initials } from "@/lib/format";
+import { addToOtherlist, listOtherlist } from "@/stores/otherStore";
 import { addToWatchlist, listWatchlist } from "@/stores/watchlistStore";
 import { parseTelegramError } from "@/telegram/errors";
 import { useTelegram } from "@/telegram/TelegramProvider";
@@ -15,10 +16,14 @@ export function JoinedPicker({
   open,
   onOpenChange,
   onAdded,
+  destination = "watchlist",
+  addItem,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAdded: () => void;
+  destination?: "watchlist" | "other";
+  addItem?: (item: WatchlistItem) => Promise<void>;
 }) {
   const { port, me } = useTelegram();
   const [chats, setChats] = useState<JoinedChat[]>([]);
@@ -34,7 +39,7 @@ export function JoinedPicker({
       try {
         const [page, list] = await Promise.all([
           port.listJoinedChannelsAndGroups(),
-          listWatchlist(),
+          destination === "other" ? listOtherlist() : listWatchlist(),
         ]);
         if (cancelled) return;
         setChats(page.chats);
@@ -48,7 +53,7 @@ export function JoinedPicker({
     return () => {
       cancelled = true;
     };
-  }, [open, port]);
+  }, [open, port, destination]);
 
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase();
@@ -71,12 +76,15 @@ export function JoinedPicker({
       muted: false,
       addedAt: Date.now(),
     };
-    await addToWatchlist(item);
+    const put = addItem ?? (destination === "other" ? addToOtherlist : addToWatchlist);
+    await put(item);
     setAdded((s) => new Set(s).add(chat.peerId));
     onAdded();
-    toast.success("Added to watchlist");
-    void pushUpsert(me?.id ?? "", item);
-    if (port) void startPrefetchForPeer(item, port);
+    toast.success(destination === "other" ? "Added to Other" : "Added to watchlist");
+    if (destination === "watchlist") {
+      void pushUpsert(me?.id ?? "", item);
+      if (port) void startPrefetchForPeer(item, port);
+    }
   }
 
   return (

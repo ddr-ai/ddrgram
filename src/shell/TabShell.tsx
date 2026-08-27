@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Clapperboard, ListVideo, Search } from "lucide-react";
+import { Clapperboard, FolderOpen, ListVideo, Search } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +18,7 @@ export function TabShell({
         aria-label="Main"
         className="tab-bar grid border-t border-border bg-surface"
         style={{
-          gridTemplateColumns: selectedPeerId ? "1fr 1fr 1fr" : "1fr 1fr",
+          gridTemplateColumns: selectedPeerId ? "repeat(4, 1fr)" : "repeat(3, 1fr)",
         }}
       >
         <TabLink to="/search" icon={<Search className="size-5" />}>
@@ -26,6 +26,9 @@ export function TabShell({
         </TabLink>
         <TabLink to="/watchlist" icon={<ListVideo className="size-5" />}>
           Watchlist
+        </TabLink>
+        <TabLink to="/other" icon={<FolderOpen className="size-5" />}>
+          Other
         </TabLink>
         {selectedPeerId ? (
           <TabLink
@@ -47,7 +50,7 @@ function TabLink({
   icon,
   children,
 }: {
-  to: "/search" | "/watchlist" | "/watchlist/$peerId";
+  to: "/search" | "/watchlist" | "/watchlist/$peerId" | "/other" | "/other/$peerId";
   params?: { peerId: string };
   icon: ReactNode;
   children: string;

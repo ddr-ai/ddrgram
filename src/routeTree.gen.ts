@@ -16,6 +16,9 @@ import { Route as AppSearchRouteImport } from './routes/_app/search'
 import { Route as AppWatchlistRouteImport } from './routes/_app/watchlist'
 import { Route as AppWatchlistIndexRouteImport } from './routes/_app/watchlist.index'
 import { Route as AppWatchlistPeerIdRouteImport } from './routes/_app/watchlist.$peerId'
+import { Route as AppOtherRouteImport } from './routes/_app/other'
+import { Route as AppOtherIndexRouteImport } from './routes/_app/other.index'
+import { Route as AppOtherPeerIdRouteImport } from './routes/_app/other.$peerId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -51,6 +54,21 @@ const AppWatchlistPeerIdRoute = AppWatchlistPeerIdRouteImport.update({
   path: '/$peerId',
   getParentRoute: () => AppWatchlistRoute,
 } as any)
+const AppOtherRoute = AppOtherRouteImport.update({
+  id: '/other',
+  path: '/other',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOtherIndexRoute = AppOtherIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppOtherRoute,
+} as any)
+const AppOtherPeerIdRoute = AppOtherPeerIdRouteImport.update({
+  id: '/$peerId',
+  path: '/$peerId',
+  getParentRoute: () => AppOtherRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -59,6 +77,9 @@ export interface FileRoutesByFullPath {
   '/watchlist': typeof AppWatchlistRouteWithChildren
   '/watchlist/$peerId': typeof AppWatchlistPeerIdRoute
   '/watchlist/': typeof AppWatchlistIndexRoute
+  '/other': typeof AppOtherRouteWithChildren
+  '/other/$peerId': typeof AppOtherPeerIdRoute
+  '/other/': typeof AppOtherIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -66,6 +87,8 @@ export interface FileRoutesByTo {
   '/search': typeof AppSearchRoute
   '/watchlist/$peerId': typeof AppWatchlistPeerIdRoute
   '/watchlist': typeof AppWatchlistIndexRoute
+  '/other/$peerId': typeof AppOtherPeerIdRoute
+  '/other': typeof AppOtherIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -76,6 +99,9 @@ export interface FileRoutesById {
   '/_app/watchlist': typeof AppWatchlistRouteWithChildren
   '/_app/watchlist/$peerId': typeof AppWatchlistPeerIdRoute
   '/_app/watchlist/': typeof AppWatchlistIndexRoute
+  '/_app/other': typeof AppOtherRouteWithChildren
+  '/_app/other/$peerId': typeof AppOtherPeerIdRoute
+  '/_app/other/': typeof AppOtherIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -86,8 +112,11 @@ export interface FileRouteTypes {
     | '/watchlist'
     | '/watchlist/$peerId'
     | '/watchlist/'
+    | '/other'
+    | '/other/$peerId'
+    | '/other/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/search' | '/watchlist/$peerId' | '/watchlist'
+  to: '/' | '/login' | '/search' | '/watchlist/$peerId' | '/watchlist' | '/other/$peerId' | '/other'
   id:
     | '__root__'
     | '/'
@@ -97,6 +126,9 @@ export interface FileRouteTypes {
     | '/_app/watchlist'
     | '/_app/watchlist/$peerId'
     | '/_app/watchlist/'
+    | '/_app/other'
+    | '/_app/other/$peerId'
+    | '/_app/other/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -156,6 +188,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppWatchlistPeerIdRouteImport
       parentRoute: typeof AppWatchlistRoute
     }
+    '/_app/other': {
+      id: '/_app/other'
+      path: '/other'
+      fullPath: '/other'
+      preLoaderRoute: typeof AppOtherRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/other/': {
+      id: '/_app/other/'
+      path: '/'
+      fullPath: '/other/'
+      preLoaderRoute: typeof AppOtherIndexRouteImport
+      parentRoute: typeof AppOtherRoute
+    }
+    '/_app/other/$peerId': {
+      id: '/_app/other/$peerId'
+      path: '/$peerId'
+      fullPath: '/other/$peerId'
+      preLoaderRoute: typeof AppOtherPeerIdRouteImport
+      parentRoute: typeof AppOtherRoute
+    }
   }
 }
 
@@ -173,14 +226,30 @@ const AppWatchlistRouteWithChildren = AppWatchlistRoute._addFileChildren(
   AppWatchlistRouteChildren,
 )
 
+interface AppOtherRouteChildren {
+  AppOtherPeerIdRoute: typeof AppOtherPeerIdRoute
+  AppOtherIndexRoute: typeof AppOtherIndexRoute
+}
+
+const AppOtherRouteChildren: AppOtherRouteChildren = {
+  AppOtherPeerIdRoute: AppOtherPeerIdRoute,
+  AppOtherIndexRoute: AppOtherIndexRoute,
+}
+
+const AppOtherRouteWithChildren = AppOtherRoute._addFileChildren(
+  AppOtherRouteChildren,
+)
+
 interface AppRouteChildren {
   AppSearchRoute: typeof AppSearchRoute
   AppWatchlistRoute: typeof AppWatchlistRouteWithChildren
+  AppOtherRoute: typeof AppOtherRouteWithChildren
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppSearchRoute: AppSearchRoute,
   AppWatchlistRoute: AppWatchlistRouteWithChildren,
+  AppOtherRoute: AppOtherRouteWithChildren,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

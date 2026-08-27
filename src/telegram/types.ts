@@ -22,6 +22,29 @@ export type VideoItem = {
   document: unknown;
 };
 
+export type FileKind =
+  | "image"
+  | "document"
+  | "code"
+  | "ebook"
+  | "archive"
+  | "package"
+  | "folder";
+
+export type FileItem = {
+  msgId: number;
+  peerId: string;
+  date: number;
+  name: string;
+  ext: string;
+  mime: string;
+  sizeBytes: number;
+  kind: FileKind;
+  media: unknown;
+  groupedId?: string;
+  children?: FileItem[];
+};
+
 export type SearchHit = {
   peerId: string;
   accessHash: string;

@@ -3,8 +3,9 @@ import { StringSession } from "teleproto/sessions";
 import { PromisedWebSockets } from "teleproto/extensions";
 import bigInt from "big-integer";
 import { AppError, parseTelegramError } from "./errors";
-import type { SearchPage, TelegramPort, VideoPage } from "./port";
-import type { ChatKind, JoinedChat, Me, SearchHit, VideoItem, WatchlistItem } from "./types";
+import type { FilePage, SearchPage, TelegramPort, VideoPage } from "./port";
+import type { ChatKind, FileItem, JoinedChat, Me, SearchHit, VideoItem, WatchlistItem } from "./types";
+import { classifyFile, extensionOf } from "../files/fileTypes";
 import {
   clearSessionString,
   loadSessionString,
@@ -198,6 +199,91 @@ function videoFromMessage(msg: Api.Message, peerId: string): VideoItem | null {
     sizeBytes: Number(doc.size),
     document: doc,
   };
+}
+
+function fileFromMessage(msg: Api.Message, peerId: string): FileItem | null {
+  const media = msg.media;
+  const groupedId = msg.groupedId != null ? String(msg.groupedId) : undefined;
+  if (media instanceof Api.MessageMediaPhoto && media.photo) {
+    const name = `photo-${msg.id}.jpg`;
+    return {
+      msgId: msg.id,
+      peerId,
+      date: msg.date,
+      name,
+      ext: "jpg",
+      mime: "image/jpeg",
+      sizeBytes: 0,
+      kind: "image",
+      media,
+      groupedId,
+    };
+  }
+  if (!(media instanceof Api.MessageMediaDocument)) return null;
+  const doc = media.document;
+  if (!(doc instanceof Api.Document)) return null;
+  const attrs = doc.attributes ?? [];
+  const isVideo = attrs.some((a) => a instanceof Api.DocumentAttributeVideo);
+  const isVoice = attrs.some(
+    (a) => a instanceof Api.DocumentAttributeAudio && "voice" in a && a.voice,
+  );
+  const isSticker = attrs.some((a) => a instanceof Api.DocumentAttributeSticker);
+  if (isVideo || isVoice || isSticker) return null;
+  const filenameAttr = attrs.find(
+    (a): a is Api.DocumentAttributeFilename => a instanceof Api.DocumentAttributeFilename,
+  );
+  const name = filenameAttr?.fileName || `file-${msg.id}`;
+  const mime = doc.mimeType || "";
+  const kind = classifyFile(name, mime);
+  if (!kind || kind === "folder") return null;
+  return {
+    msgId: msg.id,
+    peerId,
+    date: msg.date,
+    name,
+    ext: extensionOf(name),
+    mime,
+    sizeBytes: Number(doc.size) || 0,
+    kind,
+    media,
+    groupedId,
+  };
+}
+
+function groupAlbumFolders(files: FileItem[]): FileItem[] {
+  const groups = new Map<string, FileItem[]>();
+  const singles: FileItem[] = [];
+  for (const file of files) {
+    if (!file.groupedId) {
+      singles.push(file);
+      continue;
+    }
+    const list = groups.get(file.groupedId) ?? [];
+    list.push(file);
+    groups.set(file.groupedId, list);
+  }
+  const out: FileItem[] = [...singles];
+  for (const [groupedId, children] of groups) {
+    if (children.length < 2) {
+      out.push(...children);
+      continue;
+    }
+    const first = children[0]!;
+    out.push({
+      msgId: first.msgId,
+      peerId: first.peerId,
+      date: first.date,
+      name: `Album (${children.length} files)`,
+      ext: "",
+      mime: "application/x-directory",
+      sizeBytes: children.reduce((sum, f) => sum + f.sizeBytes, 0),
+      kind: "folder",
+      media: first.media,
+      groupedId,
+      children,
+    });
+  }
+  return out.sort((a, b) => b.date - a.date);
 }
 
 function toBlob(data: Buffer | Uint8Array | string | undefined, type: string): Blob {
@@ -781,6 +867,50 @@ export function createTeleprotoPort(creds: Creds): TelegramPort {
       });
     },
 
+    async searchFiles(peer, offset?: string) {
+      return wrap(async () => {
+        const c = await ensureClient();
+        let offsetId = offset ? Number(offset) : 0;
+        if (!Number.isFinite(offsetId)) offsetId = 0;
+        const collected: FileItem[] = [];
+        let lastId = offsetId;
+        let exhausted = false;
+        let steps = 0;
+        while (collected.length < 24 && steps < 5) {
+          steps += 1;
+          const res = await c.api.messages.getHistory({
+            peer: toInputPeer(peer),
+            offsetId: lastId,
+            offsetDate: 0,
+            addOffset: 0,
+            limit: 40,
+            maxId: 0,
+            minId: 0,
+            hash: bigInt(0),
+          });
+          const messages =
+            "messages" in res && Array.isArray(res.messages) ? res.messages : [];
+          if (messages.length === 0) {
+            exhausted = true;
+            break;
+          }
+          for (const raw of messages) {
+            if (!(raw instanceof Api.Message)) continue;
+            lastId = raw.id;
+            const file = fileFromMessage(raw, peer.peerId);
+            if (file) collected.push(file);
+          }
+          if (messages.length < 40) {
+            exhausted = true;
+            break;
+          }
+        }
+        const files = groupAlbumFolders(collected);
+        const nextOffset = exhausted || lastId === 0 ? null : String(lastId);
+        return { files, nextOffset } satisfies FilePage;
+      });
+    },
+
     async getVideoThumb(document: unknown) {
       return wrap(async () => {
         if (!(document instanceof Api.Document)) return null;
@@ -817,6 +947,57 @@ export function createTeleprotoPort(creds: Creds): TelegramPort {
         );
         onProgress?.(1);
         return toBlob(data, document.mimeType || "video/mp4");
+      });
+    },
+
+    async getFileThumb(media: unknown) {
+      return wrap(async () => {
+        const c = await ensureClient();
+        if (media instanceof Api.MessageMediaDocument && media.document instanceof Api.Document) {
+          if (!media.document.thumbs || media.document.thumbs.length === 0) return null;
+          const data = await c.downloadMedia(media, { thumb: 1 });
+          if (!data || typeof data === "string") return null;
+          try {
+            return toBlob(data, "image/jpeg");
+          } catch {
+            return null;
+          }
+        }
+        if (media instanceof Api.MessageMediaPhoto) {
+          const data = await c.downloadMedia(media, { thumb: 1 });
+          if (!data || typeof data === "string") return null;
+          try {
+            return toBlob(data, "image/jpeg");
+          } catch {
+            return null;
+          }
+        }
+        return null;
+      });
+    },
+
+    async downloadFile(media: unknown, onProgress?: (ratio: number) => void) {
+      return wrap(async () => {
+        const c = await ensureClient();
+        if (
+          !(media instanceof Api.MessageMediaDocument) &&
+          !(media instanceof Api.MessageMediaPhoto)
+        ) {
+          throw new AppError("download_failed", "missing file");
+        }
+        const data = await c.downloadMedia(media, {
+          progressCallback: (downloaded, total) => {
+            const d = Number(downloaded);
+            const t = Number(total);
+            if (t > 0) onProgress?.(Math.min(1, d / t));
+          },
+        });
+        onProgress?.(1);
+        const mime =
+          media instanceof Api.MessageMediaDocument && media.document instanceof Api.Document
+            ? media.document.mimeType || "application/octet-stream"
+            : "image/jpeg";
+        return toBlob(data, mime);
       });
     },
   };

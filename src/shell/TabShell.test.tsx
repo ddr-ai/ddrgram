@@ -38,12 +38,18 @@ function renderShell(selectedPeerId: string | null) {
     path: "/watchlist/$peerId",
     component: () => <div>videos</div>,
   });
+  const otherRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/other",
+    component: () => <div>other</div>,
+  });
   const router = createRouter({
     routeTree: rootRoute.addChildren([
       indexRoute,
       searchRoute,
       watchlistRoute,
       videosRoute,
+      otherRoute,
     ]),
     history: createMemoryHistory({ initialEntries: ["/search"] }),
   });
@@ -56,6 +62,7 @@ describe("TabShell", () => {
     expect(await screen.findByRole("tab", { name: "Search" })).toBeTruthy();
     expect(screen.queryByRole("tab", { name: "Videos" })).toBeNull();
     expect(screen.getByRole("tab", { name: "Watchlist" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Other" })).toBeTruthy();
   });
 
   it("shows the Videos tab when a watchlist item is selected", async () => {

@@ -10,6 +10,14 @@ export function formatDuration(sec?: number): string {
   return `${m}:${String(r).padStart(2, "0")}`;
 }
 
+export function formatBytes(n?: number): string {
+  if (n == null || !Number.isFinite(n) || n < 0) return "";
+  if (n < 1000) return `${Math.round(n)} B`;
+  if (n < 1_000_000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")} KB`;
+  if (n < 1_000_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")} MB`;
+  return `${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, "")} GB`;
+}
+
 export function formatCount(n?: number): string {
   if (n == null || !Number.isFinite(n)) return "";
   if (n < 1000) return String(n);

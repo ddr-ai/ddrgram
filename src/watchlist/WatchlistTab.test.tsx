@@ -56,8 +56,13 @@ function renderWatchlist(port = createMockPort()) {
     path: "/login",
     component: () => <div>login</div>,
   });
+  const other = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/other",
+    component: () => <div>other</div>,
+  });
   const router = createRouter({
-    routeTree: rootRoute.addChildren([watchlist, videos, search, login]),
+    routeTree: rootRoute.addChildren([watchlist, videos, search, login, other]),
     history: createMemoryHistory({ initialEntries: ["/watchlist"] }),
   });
   return render(<RouterProvider router={router} />);
