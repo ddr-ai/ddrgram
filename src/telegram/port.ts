@@ -1,9 +1,10 @@
-import type { FileItem, JoinedChat, Me, SearchHit, VideoItem, WatchlistItem } from "./types";
+import type { ChatMessage, FileItem, JoinedChat, Me, SearchHit, VideoItem, WatchlistItem } from "./types";
 
 export type LoginStart = { phone: string };
 export type VideoPage = { videos: VideoItem[]; nextOffset: string | null };
 export type SearchPage = { hits: SearchHit[]; nextOffset: string | null };
 export type FilePage = { files: FileItem[]; nextOffset: string | null };
+export type MessagePage = { messages: ChatMessage[]; nextOffset: string | null };
 
 export type AuthNext =
   | { next: "done" }
@@ -46,6 +47,10 @@ export interface TelegramPort {
     peer: Pick<WatchlistItem, "peerId" | "accessHash">,
     offset?: string,
   ): Promise<FilePage>;
+  listMessages(
+    peer: Pick<WatchlistItem, "peerId" | "accessHash">,
+    offset?: string,
+  ): Promise<MessagePage>;
   getVideoThumb(document: unknown): Promise<Blob | null>;
   getFileThumb(media: unknown): Promise<Blob | null>;
   downloadVideo(document: unknown, onProgress?: (ratio: number) => void): Promise<Blob>;

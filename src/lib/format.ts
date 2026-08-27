@@ -33,6 +33,36 @@ export function initials(title: string): string {
   return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
 }
 
+export function formatClock(unixSec: number): string {
+  if (!Number.isFinite(unixSec)) return "";
+  return new Date(unixSec * 1000).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+export function formatDayHeading(unixSec: number): string {
+  if (!Number.isFinite(unixSec)) return "";
+  const day = new Date(unixSec * 1000);
+  const start = new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime();
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const diffDays = Math.round((todayStart - start) / 86_400_000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  return day.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: day.getFullYear() === today.getFullYear() ? undefined : "numeric",
+  });
+}
+
+export function dayKey(unixSec: number): string {
+  const d = new Date(unixSec * 1000);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
 export function hueFromId(id: string): number {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;

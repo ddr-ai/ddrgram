@@ -104,31 +104,39 @@ describe("SearchTab", () => {
     const port = createMockPort({
       searchPublic: async () => ({ hits: [hit], nextOffset: null }),
       joinByUsername,
-      searchVideos: async () => ({
-        videos: [
-          {
-            msgId: 1,
-            peerId: "1001",
-            date: 1,
-            sizeBytes: 10,
-            document: {},
-            durationSec: 4,
-          },
-        ],
-        nextOffset: null,
-      }),
-      searchFiles: async () => ({
-        files: [
+      listMessages: async () => ({
+        messages: [
           {
             msgId: 2,
             peerId: "1001",
-            date: 1,
-            name: "notes.txt",
-            ext: "txt",
-            mime: "text/plain",
-            sizeBytes: 12,
-            kind: "document",
-            media: {},
+            date: Math.floor(Date.now() / 1000),
+            text: "Welcome to Cats",
+            senderName: "Cats",
+            outgoing: false,
+            photos: [],
+            files: [
+              {
+                msgId: 2,
+                peerId: "1001",
+                date: 1,
+                name: "notes.txt",
+                ext: "txt",
+                mime: "text/plain",
+                sizeBytes: 12,
+                kind: "document",
+                media: {},
+              },
+            ],
+            videos: [
+              {
+                msgId: 1,
+                peerId: "1001",
+                date: 1,
+                sizeBytes: 10,
+                document: {},
+                durationSec: 4,
+              },
+            ],
           },
         ],
         nextOffset: null,
@@ -144,7 +152,8 @@ describe("SearchTab", () => {
     expect(router.state.location.pathname).toBe("/search/1001");
     expect(await screen.findByRole("button", { name: "Add to Watchlist" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Add to Other" })).toBeTruthy();
-    expect(await screen.findByText("notes.txt")).toBeTruthy();
+    expect(await screen.findByText("Welcome to Cats")).toBeTruthy();
+    expect(screen.getByText("notes.txt")).toBeTruthy();
   });
 
   it("Add to Watchlist from the channel does not join", async () => {
@@ -156,8 +165,6 @@ describe("SearchTab", () => {
     const port = createMockPort({
       joinByUsername,
       joinChannel,
-      searchVideos: async () => ({ videos: [], nextOffset: null }),
-      searchFiles: async () => ({ files: [], nextOffset: null }),
     });
     const rootRoute = createRootRoute({
       component: () => (
@@ -235,8 +242,6 @@ describe("SearchTab", () => {
     stashSearchHit(hit);
     const port = createMockPort({
       joinByUsername,
-      searchVideos: async () => ({ videos: [], nextOffset: null }),
-      searchFiles: async () => ({ files: [], nextOffset: null }),
     });
     const rootRoute = createRootRoute({
       component: () => (

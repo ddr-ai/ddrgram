@@ -65,6 +65,19 @@ export type JoinedChat = {
   photoBlob?: Blob;
 };
 
+export type ChatMessage = {
+  msgId: number;
+  peerId: string;
+  date: number;
+  text: string;
+  senderName: string;
+  outgoing: boolean;
+  groupedId?: string;
+  photos: FileItem[];
+  files: FileItem[];
+  videos: VideoItem[];
+};
+
 export type Me = {
   id: string;
   firstName: string;

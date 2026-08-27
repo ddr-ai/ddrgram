@@ -1,6 +1,14 @@
 import { AppError } from "./errors";
 import type { TelegramPort } from "./port";
-import type { FileItem, JoinedChat, Me, SearchHit, VideoItem, WatchlistItem } from "./types";
+import type {
+  ChatMessage,
+  FileItem,
+  JoinedChat,
+  Me,
+  SearchHit,
+  VideoItem,
+  WatchlistItem,
+} from "./types";
 import { saveSessionString, loadSessionString, clearSessionString } from "../stores/sessionStore";
 
 const DEMO_ME: Me = { id: "1", firstName: "Test" };
@@ -97,6 +105,9 @@ export function createMockPort(overrides: Partial<TelegramPort> = {}): TelegramP
     },
     async searchFiles() {
       return { files: [] as FileItem[], nextOffset: null };
+    },
+    async listMessages() {
+      return { messages: [] as ChatMessage[], nextOffset: null };
     },
     async getVideoThumb() {
       return null;

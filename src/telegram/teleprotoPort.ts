@@ -3,8 +3,18 @@ import { StringSession } from "teleproto/sessions";
 import { PromisedWebSockets } from "teleproto/extensions";
 import bigInt from "big-integer";
 import { AppError, parseTelegramError } from "./errors";
-import type { FilePage, SearchPage, TelegramPort, VideoPage } from "./port";
-import type { ChatKind, FileItem, JoinedChat, Me, SearchHit, VideoItem, WatchlistItem } from "./types";
+import { groupChatMessages } from "./messages";
+import type { FilePage, MessagePage, SearchPage, TelegramPort, VideoPage } from "./port";
+import type {
+  ChatKind,
+  ChatMessage,
+  FileItem,
+  JoinedChat,
+  Me,
+  SearchHit,
+  VideoItem,
+  WatchlistItem,
+} from "./types";
 import { classifyFile, extensionOf } from "../files/fileTypes";
 import {
   clearSessionString,
@@ -247,6 +257,103 @@ function fileFromMessage(msg: Api.Message, peerId: string): FileItem | null {
     kind,
     media,
     groupedId,
+  };
+}
+
+function videoLikeFromMessage(msg: Api.Message, peerId: string): VideoItem | null {
+  const existing = videoFromMessage(msg, peerId);
+  if (existing) return existing;
+  const media = msg.media;
+  if (!(media instanceof Api.MessageMediaDocument)) return null;
+  const doc = media.document;
+  if (!(doc instanceof Api.Document)) return null;
+  const attrs = doc.attributes ?? [];
+  const isGif = attrs.some((a) => a instanceof Api.DocumentAttributeAnimated);
+  const videoAttr = attrs.find(
+    (a): a is Api.DocumentAttributeVideo => a instanceof Api.DocumentAttributeVideo,
+  );
+  if (!isGif && !videoAttr) return null;
+  const isVoice = attrs.some(
+    (a) => a instanceof Api.DocumentAttributeAudio && "voice" in a && a.voice,
+  );
+  const isSticker = attrs.some((a) => a instanceof Api.DocumentAttributeSticker);
+  if (isVoice || isSticker) return null;
+  return {
+    msgId: msg.id,
+    peerId,
+    date: msg.date,
+    durationSec: videoAttr?.duration,
+    width: videoAttr?.w,
+    height: videoAttr?.h,
+    sizeBytes: Number(doc.size),
+    document: doc,
+  };
+}
+
+function userDisplayName(user: Api.User): string {
+  const name = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+  if (name) return name;
+  if (user.username) return user.username;
+  return "Member";
+}
+
+function senderOf(
+  msg: Api.Message,
+  users: Map<string, Api.User>,
+  chats: Map<string, Api.Channel | Api.Chat>,
+  fallback: string,
+): { senderName: string; outgoing: boolean } {
+  const outgoing = Boolean(msg.out);
+  const from = msg.fromId;
+  if (from instanceof Api.PeerUser) {
+    const user = users.get(String(from.userId));
+    return { senderName: user ? userDisplayName(user) : fallback || "Member", outgoing };
+  }
+  if (from instanceof Api.PeerChannel) {
+    const chat = chats.get(String(from.channelId));
+    return { senderName: chat?.title || fallback, outgoing };
+  }
+  if (from instanceof Api.PeerChat) {
+    const chat = chats.get(String(from.chatId));
+    return { senderName: chat?.title || fallback, outgoing };
+  }
+  return { senderName: fallback, outgoing };
+}
+
+function chatMessageFromApi(
+  msg: Api.Message,
+  peerId: string,
+  users: Map<string, Api.User>,
+  chats: Map<string, Api.Channel | Api.Chat>,
+  fallbackName: string,
+): ChatMessage | null {
+  const photos: FileItem[] = [];
+  const files: FileItem[] = [];
+  const videos: VideoItem[] = [];
+  const video = videoLikeFromMessage(msg, peerId);
+  if (video) videos.push(video);
+  const file = fileFromMessage(msg, peerId);
+  if (file) {
+    if (file.kind === "image") photos.push(file);
+    else files.push(file);
+  }
+  const text = (msg.message ?? "").trim();
+  if (!text && photos.length === 0 && files.length === 0 && videos.length === 0) {
+    return null;
+  }
+  const groupedId = msg.groupedId != null ? String(msg.groupedId) : undefined;
+  const { senderName, outgoing } = senderOf(msg, users, chats, fallbackName);
+  return {
+    msgId: msg.id,
+    peerId,
+    date: msg.date,
+    text,
+    senderName,
+    outgoing,
+    groupedId,
+    photos,
+    files,
+    videos,
   };
 }
 
@@ -908,6 +1015,55 @@ export function createTeleprotoPort(creds: Creds): TelegramPort {
         const files = groupAlbumFolders(collected);
         const nextOffset = exhausted || lastId === 0 ? null : String(lastId);
         return { files, nextOffset } satisfies FilePage;
+      });
+    },
+
+    async listMessages(peer, offset?: string) {
+      return wrap(async () => {
+        const c = await ensureClient();
+        let offsetId = offset ? Number(offset) : 0;
+        if (!Number.isFinite(offsetId)) offsetId = 0;
+        const res = await c.api.messages.getHistory({
+          peer: toInputPeer(peer),
+          offsetId,
+          offsetDate: 0,
+          addOffset: 0,
+          limit: 50,
+          maxId: 0,
+          minId: 0,
+          hash: bigInt(0),
+        });
+        const rawMessages =
+          "messages" in res && Array.isArray(res.messages) ? res.messages : [];
+        const users = new Map<string, Api.User>();
+        if ("users" in res && Array.isArray(res.users)) {
+          for (const user of res.users) {
+            if (user instanceof Api.User) users.set(String(user.id), user);
+          }
+        }
+        const chats = new Map<string, Api.Channel | Api.Chat>();
+        if ("chats" in res && Array.isArray(res.chats)) {
+          for (const chat of res.chats) {
+            if (chat instanceof Api.Channel || chat instanceof Api.Chat) {
+              chats.set(String(chat.id), chat);
+            }
+          }
+        }
+        const fallbackName = chats.get(peer.peerId)?.title ?? "";
+        const mapped: ChatMessage[] = [];
+        let lastId = offsetId;
+        for (const raw of rawMessages) {
+          if (!(raw instanceof Api.Message)) continue;
+          lastId = raw.id;
+          const item = chatMessageFromApi(raw, peer.peerId, users, chats, fallbackName);
+          if (item) mapped.push(item);
+        }
+        const messages = groupChatMessages(mapped).sort(
+          (a, b) => a.date - b.date || a.msgId - b.msgId,
+        );
+        const nextOffset =
+          rawMessages.length < 50 || lastId === 0 ? null : String(lastId);
+        return { messages, nextOffset } satisfies MessagePage;
       });
     },
 
