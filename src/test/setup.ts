@@ -6,6 +6,12 @@ import { deleteDatabase } from "@/stores/db";
 
 beforeEach(async () => {
   await deleteDatabase();
+  try {
+    localStorage.clear();
+    sessionStorage.clear();
+  } catch {
+    // jsdom storage
+  }
 });
 
 afterEach(() => {
@@ -42,6 +48,22 @@ if (typeof globalThis.IntersectionObserver === "undefined") {
     unobserve() {}
     disconnect() {}
   } as unknown as typeof IntersectionObserver;
+}
+
+if (typeof window.matchMedia !== "function") {
+  window.matchMedia = (query: string) =>
+    ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener() {},
+      removeListener() {},
+      addEventListener() {},
+      removeEventListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    }) as MediaQueryList;
 }
 
 if (typeof globalThis.ResizeObserver === "undefined") {

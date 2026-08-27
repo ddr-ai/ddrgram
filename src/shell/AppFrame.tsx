@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { useTelegram } from "@/telegram/TelegramProvider";
 import { OfflineBanner } from "@/ui/OfflineBanner";
+import { DeviceShell } from "./DeviceShell";
 import { TabShell } from "./TabShell";
 
 function selectedPeerFromPath(pathname: string): string | null {
@@ -19,9 +20,10 @@ export function AppFrame({ children }: { children: ReactNode }) {
   const [confirm, setConfirm] = useState(false);
 
   return (
-    <div className="flex h-dvh flex-col bg-bg text-fg">
+    <DeviceShell>
+      <div className="flex h-full min-h-0 flex-col">
       <OfflineBanner />
-      <header className="flex items-center gap-3 border-b border-border px-4 py-3">
+      <header className="app-header flex items-center gap-3 border-b border-border px-4 py-3 shadow-[var(--shadow-raised)] md:px-6">
         <p className="font-display text-base font-semibold tracking-tight">TG Videos</p>
         <span className="ml-auto truncate text-sm text-muted">{me?.firstName}</span>
         <Button
@@ -36,7 +38,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
       <TabShell selectedPeerId={selectedPeerId}>{children}</TabShell>
       {confirm ? (
         <div className="fixed inset-0 z-40 flex items-end justify-center bg-bg/70 p-4 sm:items-center">
-          <div className="w-full max-w-sm rounded-2xl bg-surface p-5 shadow-[var(--shadow-border)]">
+          <div className="w-full max-w-sm rounded-2xl bg-surface p-5 shadow-[var(--shadow-device)]">
             <h2 className="font-display text-lg font-semibold">Log out?</h2>
             <p className="mt-2 text-sm text-muted text-pretty">
               Your watchlist stays unless you clear it.
@@ -68,6 +70,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
           </div>
         </div>
       ) : null}
-    </div>
+      </div>
+    </DeviceShell>
   );
 }

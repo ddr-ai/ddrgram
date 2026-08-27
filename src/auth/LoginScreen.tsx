@@ -172,7 +172,7 @@ export function LoginScreen({
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-5 py-10">
+    <main className="mx-auto flex h-full w-full max-w-md flex-col justify-center overflow-y-auto px-5 py-10">
       <div className="mb-8">
         <div className="mb-5 flex size-14 items-center justify-center rounded-2xl bg-surface-2 shadow-[var(--shadow-border)]">
           <svg viewBox="0 0 32 32" className="size-8" aria-hidden="true">

@@ -115,4 +115,24 @@ describe("WatchlistTab", () => {
     await user.click(await screen.findByRole("menuitem", { name: "Unmute" }));
     await waitFor(() => expect(unmute).toHaveBeenCalled());
   });
+
+  it("shows the video total for each channel", async () => {
+    await addToWatchlist(cats);
+    const countVideos = vi.fn(async () => 42);
+    renderWatchlist(createMockPort({ countVideos }));
+    expect(await screen.findByText("Cats")).toBeTruthy();
+    expect(await screen.findByLabelText("42 videos")).toBeTruthy();
+    expect(countVideos).toHaveBeenCalled();
+  });
+
+  it("updates the video total when new videos are uploaded", async () => {
+    await addToWatchlist(cats);
+    let total = 12;
+    const countVideos = vi.fn(async () => total);
+    renderWatchlist(createMockPort({ countVideos }));
+    expect(await screen.findByLabelText("12 videos")).toBeTruthy();
+    total = 15;
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(await screen.findByLabelText("15 videos")).toBeTruthy();
+  });
 });

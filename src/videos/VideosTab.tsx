@@ -1,8 +1,10 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
+import { Minus, Plus } from "lucide-react";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { formatDuration } from "@/lib/format";
 import { PlayerOverlay } from "@/player/PlayerOverlay";
+import { useGridSize } from "@/stores/gridSizeStore";
 import { loadGridScroll, saveGridScroll } from "@/stores/scrollStore";
 import { listWatchlist } from "@/stores/watchlistStore";
 import { AppError, parseTelegramError } from "@/telegram/errors";
@@ -23,6 +25,7 @@ export function VideosTab({ peerId }: { peerId: string }) {
   const scroller = useRef<HTMLDivElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
   const playerOpen = currentMsgId != null;
+  const grid = useGridSize();
 
   useEffect(() => {
     void listWatchlist().then((list) => {
@@ -137,11 +140,33 @@ export function VideosTab({ peerId }: { peerId: string }) {
       <div
         ref={scroller}
         hidden={playerOpen}
-        className="min-h-0 flex-1 overflow-y-auto px-3 py-3"
+        className="min-h-0 flex-1 overflow-y-auto px-3 py-3 md:px-5"
       >
-        <h1 className="mb-3 px-1 font-display text-lg font-semibold">
-          {peer?.title ?? "Videos"}
-        </h1>
+        <div className="mb-3 flex items-center gap-2 px-1">
+          <h1 className="min-w-0 flex-1 truncate font-display text-lg font-semibold tracking-tight">
+            {peer?.title ?? "Videos"}
+          </h1>
+          <div className="flex shrink-0 items-center gap-1 rounded-xl bg-surface-2 p-1 shadow-[var(--shadow-raised)]">
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label="Smaller videos"
+              disabled={!grid.canSmaller}
+              onClick={() => grid.smaller()}
+            >
+              <Minus className="size-5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label="Larger videos"
+              disabled={!grid.canLarger}
+              onClick={() => grid.larger()}
+            >
+              <Plus className="size-5" />
+            </Button>
+          </div>
+        </div>
         {error?.code === "private_chat" ? (
           <div className="px-1">
             <p className="text-sm text-muted text-pretty">
@@ -158,13 +183,17 @@ export function VideosTab({ peerId }: { peerId: string }) {
         {state.status === "loading" ? (
           <p className="px-1 text-sm text-muted">Loading videos…</p>
         ) : null}
-        <div className="video-grid">
+        <div
+          className="video-grid"
+          data-tile={grid.px}
+          style={{ ["--video-tile" as string]: `${grid.px}px` }}
+        >
           {state.items.map((v) => (
             <button
               key={v.msgId}
               type="button"
               data-msgid={v.msgId}
-              className="group relative aspect-video overflow-hidden rounded-lg bg-surface-2"
+              className="video-tile group relative aspect-video overflow-hidden rounded-lg bg-surface-2"
               onClick={() => openPlayer(v.msgId)}
             >
               {thumbs[v.msgId] ? (

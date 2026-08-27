@@ -13,6 +13,7 @@ import { AppError } from "@/telegram/errors";
 import { createMockPort } from "@/telegram/mockPort";
 import { TelegramProvider } from "@/telegram/TelegramProvider";
 import { deleteDatabase } from "@/stores/db";
+import { GRID_SIZE_KEY, GRID_SIZE_STEPS, DEFAULT_GRID_INDEX } from "@/stores/gridSizeStore";
 import { addToWatchlist } from "@/stores/watchlistStore";
 import type { VideoItem, WatchlistItem } from "@/telegram/types";
 import { VideosTab } from "./VideosTab";
@@ -63,6 +64,7 @@ function renderVideos(port: ReturnType<typeof createMockPort>) {
 describe("VideosTab", () => {
   beforeEach(async () => {
     await deleteDatabase();
+    localStorage.clear();
     await addToWatchlist(peer);
   });
 
@@ -99,5 +101,26 @@ describe("VideosTab", () => {
     await waitFor(() => {
       expect(document.querySelectorAll("[data-msgid]").length).toBe(3);
     });
+  });
+
+  it("plus and minus resize the grid and persist the chosen size", async () => {
+    const user = userEvent.setup();
+    const port = createMockPort({
+      searchVideos: async () => ({
+        videos: [video(3), video(2), video(1)],
+        nextOffset: null,
+      }),
+    });
+    renderVideos(port);
+    await waitFor(() => {
+      expect(document.querySelectorAll("[data-msgid]").length).toBe(3);
+    });
+    const grid = document.querySelector(".video-grid") as HTMLElement;
+    expect(grid.dataset.tile).toBe(String(GRID_SIZE_STEPS[DEFAULT_GRID_INDEX]));
+    await user.click(screen.getByRole("button", { name: "Larger videos" }));
+    expect(grid.dataset.tile).toBe(String(GRID_SIZE_STEPS[DEFAULT_GRID_INDEX + 1]));
+    expect(localStorage.getItem(GRID_SIZE_KEY)).toBe(String(DEFAULT_GRID_INDEX + 1));
+    await user.click(screen.getByRole("button", { name: "Smaller videos" }));
+    expect(grid.dataset.tile).toBe(String(GRID_SIZE_STEPS[DEFAULT_GRID_INDEX]));
   });
 });

@@ -1,5 +1,5 @@
-import { Video } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Users, Video } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatCount, hueFromId, initials } from "@/lib/format";
@@ -8,81 +8,31 @@ import { hitToWatchlistItem } from "./searchHits";
 import { addToWatchlist } from "@/stores/watchlistStore";
 import { AppError, parseTelegramError } from "@/telegram/errors";
 import { useTelegram } from "@/telegram/TelegramProvider";
-import type { TelegramPort } from "@/telegram/port";
 import type { SearchHit, WatchlistItem } from "@/telegram/types";
 import { toast } from "@/ui/Toast";
 import { startPrefetchForPeer } from "@/videos/prefetch";
+import { usePeerVideoCounts } from "@/videos/usePeerVideoCounts";
 import { pushUpsert } from "@/watchlist/syncClient";
 
-function usePeerVideoCounts(port: TelegramPort | null, hits: SearchHit[]) {
-  const [counts, setCounts] = useState<Record<string, number | null>>({});
-  const inflight = useRef(new Set<string>());
-  const queued = useRef(new Set<string>());
-  const queue = useRef<SearchHit[]>([]);
-  const active = useRef(0);
-  const pauseUntil = useRef(0);
-  const portRef = useRef(port);
-  const countsRef = useRef(counts);
-  portRef.current = port;
-  countsRef.current = counts;
+function tiltCard(event: PointerEvent<HTMLLIElement>) {
+  if (event.pointerType !== "mouse") return;
+  if (
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  ) {
+    return;
+  }
+  const el = event.currentTarget;
+  const rect = el.getBoundingClientRect();
+  const x = (event.clientX - rect.left) / rect.width - 0.5;
+  const y = (event.clientY - rect.top) / rect.height - 0.5;
+  el.style.setProperty("--tilt-x", `${(-y * 7).toFixed(2)}deg`);
+  el.style.setProperty("--tilt-y", `${(x * 9).toFixed(2)}deg`);
+}
 
-  const pump = useCallback(() => {
-    const p = portRef.current;
-    if (!p) return;
-    const resume = () => {
-      const wait = pauseUntil.current - Date.now();
-      if (wait > 0) {
-        window.setTimeout(() => pump(), wait);
-        return;
-      }
-      pump();
-    };
-    while (active.current < 2 && queue.current.length) {
-      if (Date.now() < pauseUntil.current) {
-        resume();
-        return;
-      }
-      const hit = queue.current.shift()!;
-      queued.current.delete(hit.peerId);
-      if (hit.peerId in countsRef.current || inflight.current.has(hit.peerId)) continue;
-      inflight.current.add(hit.peerId);
-      active.current++;
-      void p
-        .countVideos(hit)
-        .then((n) => {
-          setCounts((c) => ({ ...c, [hit.peerId]: n }));
-        })
-        .catch((err) => {
-          const parsed = parseTelegramError(err);
-          if (parsed.code === "flood_wait" && (parsed.waitSeconds ?? 0) > 0) {
-            pauseUntil.current = Date.now() + parsed.waitSeconds! * 1000;
-            inflight.current.delete(hit.peerId);
-            queue.current.unshift(hit);
-            queued.current.add(hit.peerId);
-          } else {
-            setCounts((c) => ({ ...c, [hit.peerId]: null }));
-          }
-        })
-        .finally(() => {
-          active.current--;
-          inflight.current.delete(hit.peerId);
-          pump();
-        });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!port) return;
-    for (const hit of hits) {
-      if (hit.peerId in countsRef.current) continue;
-      if (inflight.current.has(hit.peerId) || queued.current.has(hit.peerId)) continue;
-      queued.current.add(hit.peerId);
-      queue.current.push(hit);
-    }
-    pump();
-  }, [hits, port, pump]);
-
-  return counts;
+function untiltCard(event: PointerEvent<HTMLLIElement>) {
+  event.currentTarget.style.setProperty("--tilt-x", "0deg");
+  event.currentTarget.style.setProperty("--tilt-y", "0deg");
 }
 
 export function SearchTab({
@@ -270,7 +220,7 @@ export function SearchTab({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-border px-4 py-3">
+      <div className="border-b border-border px-4 py-3 md:px-6">
         <label className="sr-only" htmlFor="search-q">
           Search
         </label>
@@ -281,7 +231,7 @@ export function SearchTab({
           onChange={(e) => setQuery(e.target.value)}
         />
       </div>
-      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-6">
         {!query.trim() ? (
           <p className="text-sm text-muted text-pretty">
             Search public channels and groups, or paste an invite link. Join and Add
@@ -295,7 +245,7 @@ export function SearchTab({
         {!busy && query.trim() && hits.length === 0 && !error ? (
           <p className="text-sm text-muted">No channels or groups found.</p>
         ) : null}
-        <ul className="flex flex-col gap-3">
+        <ul className="search-list flex flex-col gap-3">
           {hits.map((hit) => {
             const isPending = pending[hit.peerId] || hit.membership === "pending";
             const resolved = hit.peerId in videoCounts;
@@ -308,42 +258,49 @@ export function SearchTab({
             return (
               <li
                 key={hit.peerId}
-                className="flex items-center gap-3 rounded-2xl bg-surface p-3 shadow-[var(--shadow-border)]"
+                className="search-card flex items-center gap-3 rounded-2xl bg-surface p-3 md:gap-4 md:p-4"
+                onPointerMove={tiltCard}
+                onPointerLeave={untiltCard}
               >
                 <span
-                  className="flex size-11 shrink-0 items-center justify-center rounded-xl text-xs font-semibold"
+                  className="search-avatar flex size-12 shrink-0 items-center justify-center rounded-xl text-xs font-semibold md:size-14"
                   style={{
-                    background: `hsl(${hueFromId(hit.peerId)} 28% 22%)`,
+                    background: `hsl(${hueFromId(hit.peerId)} 32% 24%)`,
                   }}
                 >
                   {initials(hit.title)}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{hit.title}</p>
-                  <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
-                    <span>
-                      {hit.kind}
-                      {hit.memberCount != null ? ` · ${formatCount(hit.memberCount)}` : ""}
-                    </span>
-                    <span
-                      className="inline-flex items-center gap-1"
-                      aria-label={countLabel}
-                    >
-                      <Video className="size-3.5" aria-hidden />
+                  <p className="truncate font-display font-semibold tracking-tight">
+                    {hit.title}
+                  </p>
+                  {hit.username ? (
+                    <p className="truncate text-xs text-subtle">@{hit.username}</p>
+                  ) : null}
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className="meta-chip capitalize">{hit.kind}</span>
+                    {hit.memberCount != null ? (
+                      <span className="meta-chip">
+                        <Users className="size-3" aria-hidden />
+                        <span className="tabular-nums">{formatCount(hit.memberCount)}</span>
+                      </span>
+                    ) : null}
+                    <span className="meta-chip" aria-label={countLabel}>
+                      <Video className="size-3" aria-hidden />
                       {!resolved ? (
-                        <span className="inline-block h-3 w-6 animate-pulse rounded bg-surface-2" />
+                        <span className="inline-block h-3 w-6 animate-pulse rounded bg-surface" />
                       ) : count == null ? (
                         "—"
                       ) : (
                         <span className="tabular-nums">{formatCount(count)}</span>
                       )}
                     </span>
-                  </p>
+                  </div>
                   {isPending ? (
-                    <p className="text-xs text-muted">pending approval</p>
+                    <p className="mt-1.5 text-xs text-muted">pending approval</p>
                   ) : null}
                 </div>
-                <div className="flex shrink-0 flex-col gap-1">
+                <div className="flex shrink-0 flex-col gap-1.5">
                   <Button
                     size="sm"
                     variant="outline"

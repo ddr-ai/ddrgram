@@ -59,8 +59,10 @@ function TabLink({
       to={to}
       params={params}
       className={cn(
-        "flex min-h-11 flex-col items-center justify-center gap-0.5 py-2 text-xs font-medium text-muted",
-        "[&.active]:text-fg",
+        "mx-1 flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-xl py-2 text-xs font-medium text-muted",
+        "transition-[transform,box-shadow,background-color,color] duration-[var(--motion-quick)] ease-[var(--ease-out)]",
+        "[&.active]:bg-surface-2 [&.active]:text-fg [&.active]:shadow-[var(--shadow-raised)]",
+        "active:scale-[0.98]",
       )}
     >
       {icon}
