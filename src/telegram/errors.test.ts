@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AppError, parseTelegramError } from "./errors";
+import { AppError, parseTelegramError, userMessage } from "./errors";
 
 describe("parseTelegramError", () => {
   it("extracts flood wait seconds", () => {
@@ -45,5 +45,25 @@ describe("parseTelegramError", () => {
     const e = parseTelegramError(new FloodWaitError("Please wait 17 seconds"));
     expect(e.code).toBe("flood_wait");
     expect(e.waitSeconds).toBe(17);
+  });
+});
+
+describe("userMessage", () => {
+  it("turns flood wait into a countdown copy", () => {
+    expect(userMessage(new AppError("flood_wait", "FLOOD_WAIT_32", 32))).toBe(
+      "Wait 32s before trying again.",
+    );
+  });
+
+  it("hides raw RPC codes from the user", () => {
+    expect(userMessage(new AppError("unknown", "RPC_CALL_FAIL"))).toBe(
+      "Something went wrong. Try again.",
+    );
+  });
+
+  it("keeps a readable fallback for private chats", () => {
+    expect(userMessage(parseTelegramError(new Error("CHANNEL_PRIVATE")))).toBe(
+      "This chat is private or you are not a participant.",
+    );
   });
 });
