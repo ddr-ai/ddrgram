@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { neighborMsgIds, revokeObjectUrl } from "./playerIndex";
 import { getCachedVideo, putCachedVideoWithEviction } from "@/stores/videoCacheStore";
-import { parseTelegramError } from "@/telegram/errors";
+import { errorMessage } from "@/telegram/errors";
 import { useTelegram } from "@/telegram/TelegramProvider";
 import type { VideoItem, WatchlistItem } from "@/telegram/types";
 import { toast } from "@/ui/Toast";
@@ -29,6 +29,7 @@ export function PlayerOverlay({
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const current = items.find((v) => v.msgId === currentMsgId) ?? null;
   const neighbors = neighborMsgIds(items, currentMsgId);
 
@@ -73,7 +74,7 @@ export function PlayerOverlay({
         void prefetch(prev);
         void prefetch(next);
       } catch (err) {
-        if (!cancelled) setError(parseTelegramError(err).message || "Download failed");
+        if (!cancelled) setError(errorMessage(err));
       } finally {
         if (!cancelled) setBusy(false);
       }
@@ -111,7 +112,7 @@ export function PlayerOverlay({
     return () => {
       cancelled = true;
     };
-  }, [current, items, port, peer.peerId]);
+  }, [current, items, port, peer.peerId, attempt]);
 
   useEffect(() => {
     return () => {
@@ -129,8 +130,43 @@ export function PlayerOverlay({
     else el.pause();
   }
 
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (target?.tagName === "VIDEO") return;
+      if (event.key === "ArrowLeft" && neighbors.prev != null) {
+        event.preventDefault();
+        onChangeMsgId(neighbors.prev);
+      } else if (event.key === "ArrowRight" && neighbors.next != null) {
+        event.preventDefault();
+        onChangeMsgId(neighbors.next);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [neighbors.prev, neighbors.next, onClose, onChangeMsgId]);
+
   return (
-    <div className="absolute inset-0 z-20 flex flex-col bg-bg">
+    <div
+      className="absolute inset-0 z-20 flex flex-col bg-bg"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Video player"
+    >
       <div className="flex items-center gap-2 px-2 py-2">
         <Button variant="ghost" aria-label="Back" onClick={onClose}>
           <ChevronLeft className="size-5" />
@@ -165,7 +201,7 @@ export function PlayerOverlay({
                       revokeObjectUrl(u);
                       return null;
                     });
-                    onChangeMsgId(currentMsgId);
+                    setAttempt((n) => n + 1);
                   }}
                 >
                   Retry

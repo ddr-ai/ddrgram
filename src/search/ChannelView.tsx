@@ -8,7 +8,7 @@ import { PlayerOverlay } from "@/player/PlayerOverlay";
 import { saveBlobToDownloads } from "@/files/saveToDownloads";
 import { addToOtherlist } from "@/stores/otherStore";
 import { addToWatchlist } from "@/stores/watchlistStore";
-import { AppError, parseTelegramError } from "@/telegram/errors";
+import { AppError, parseTelegramError, userMessage } from "@/telegram/errors";
 import {
   mergeMessagePages,
   showSenderName,
@@ -56,6 +56,8 @@ export function ChannelView({
     setHit((current) =>
       current?.peerId === peerId ? current : loadSearchHit(peerId),
     );
+    for (const url of thumbUrls.current) URL.revokeObjectURL(url);
+    thumbUrls.current = [];
     setMessages([]);
     setNextOffset(null);
     setThumbs({});
@@ -92,7 +94,7 @@ export function ChannelView({
         setError(
           parsed.code === "private_chat"
             ? "Join this channel or group to read the conversation."
-            : parsed.message,
+            : userMessage(parsed),
         );
       } finally {
         if (id === requestId.current) {
@@ -201,7 +203,7 @@ export function ChannelView({
         void pushUpsert(me?.id ?? "", item);
         if (port) void startPrefetchForPeer(item, port);
       } catch (err) {
-        toast.error(err instanceof AppError ? err.message : "Could not add");
+        toast.error(err instanceof AppError ? userMessage(err) : "Could not add");
       }
     },
     [hit, addItem, addOtherItem, me?.id, port],
@@ -228,7 +230,7 @@ export function ChannelView({
         toast("Join request sent — pending approval");
         return;
       }
-      toast.error(parsed.message);
+      toast.error(userMessage(parsed));
     }
   }
 
@@ -302,7 +304,14 @@ export function ChannelView({
         {loadingOlder ? (
           <p className="py-2 text-center text-xs text-muted">Loading earlier messages…</p>
         ) : null}
-        {error ? <p className="px-1 py-2 text-sm text-danger">{error}</p> : null}
+        {error ? (
+          <div className="px-1 py-2">
+            <p className="text-sm text-danger">{error}</p>
+            <Button className="mt-3" variant="outline" onClick={() => void loadPage()}>
+              Retry
+            </Button>
+          </div>
+        ) : null}
         {busy ? <p className="px-1 py-6 text-sm text-muted">Loading conversation…</p> : null}
         {!busy && messages.length === 0 && !error ? (
           <p className="px-1 py-6 text-sm text-muted">No messages in this {hit.kind} yet.</p>

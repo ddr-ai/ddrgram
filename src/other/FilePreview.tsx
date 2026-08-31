@@ -5,7 +5,7 @@ import { extractZipEntry, hexPreview, type ArchiveEntry } from "@/files/archiveL
 import { classifyFile, extensionOf } from "@/files/fileTypes";
 import { listContents, type ListedContents } from "@/files/listContents";
 import { decodeText, previewMode } from "@/files/previewMode";
-import { parseTelegramError } from "@/telegram/errors";
+import { errorMessage } from "@/telegram/errors";
 import type { TelegramPort } from "@/telegram/port";
 import type { FileItem } from "@/telegram/types";
 
@@ -84,7 +84,7 @@ export function FilePreview({
         setBlob(next);
         setBuffer(new Uint8Array(await next.arrayBuffer()));
       } catch (err) {
-        if (!cancelled) setError(parseTelegramError(err).message || "Could not open file");
+        if (!cancelled) setError(errorMessage(err));
       } finally {
         if (!cancelled) setBusy(false);
       }
@@ -137,6 +137,17 @@ export function FilePreview({
     if (stack.length > 1) setStack((s) => s.slice(0, -1));
     else onClose();
   }
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      if (stack.length > 1) setStack((s) => s.slice(0, -1));
+      else onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [stack.length, onClose]);
 
   function save() {
     if (current.source === "local") {
@@ -195,7 +206,12 @@ export function FilePreview({
       : listing?.text ?? (mode === "binary" && buffer ? hexPreview(buffer) : null);
 
   return (
-    <div className="absolute inset-0 z-20 flex flex-col bg-bg">
+    <div
+      className="absolute inset-0 z-20 flex flex-col bg-bg"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
       <div className="flex items-center gap-2 px-2 py-2">
         <Button variant="ghost" aria-label="Back" onClick={back}>
           <ChevronLeft className="size-5" />

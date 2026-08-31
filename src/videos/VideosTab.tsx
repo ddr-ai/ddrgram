@@ -7,9 +7,10 @@ import { PlayerOverlay } from "@/player/PlayerOverlay";
 import { useGridSize } from "@/stores/gridSizeStore";
 import { loadGridScroll, saveGridScroll } from "@/stores/scrollStore";
 import { listWatchlist } from "@/stores/watchlistStore";
-import { AppError, parseTelegramError } from "@/telegram/errors";
+import { AppError, errorMessage, parseTelegramError, userMessage } from "@/telegram/errors";
 import { useTelegram } from "@/telegram/TelegramProvider";
 import type { WatchlistItem } from "@/telegram/types";
+import { toast } from "@/ui/Toast";
 import { emptyVideoList, reduceVideoList } from "./videoList";
 
 export function VideosTab({ peerId }: { peerId: string }) {
@@ -24,18 +25,34 @@ export function VideosTab({ peerId }: { peerId: string }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
+  const thumbsRef = useRef<Record<number, string>>({});
+  const requestId = useRef(0);
   const playerOpen = currentMsgId != null;
   const grid = useGridSize();
+  thumbsRef.current = thumbs;
 
   useEffect(() => {
+    let cancelled = false;
+    requestId.current += 1;
+    dispatch({ type: "reset" });
+    setError(null);
+    setPeer(null);
+    for (const url of Object.values(thumbsRef.current)) URL.revokeObjectURL(url);
+    thumbsRef.current = {};
+    setThumbs({});
     void listWatchlist().then((list) => {
+      if (cancelled) return;
       setPeer(list.find((x) => x.peerId === peerId) ?? null);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [peerId]);
 
   const loadPage = useCallback(
     async (offset?: string) => {
       if (!port || !peer) return;
+      const id = requestId.current;
       if (!offset) {
         dispatch({ type: "reset" });
         setError(null);
@@ -44,13 +61,19 @@ export function VideosTab({ peerId }: { peerId: string }) {
       }
       try {
         const page = await port.searchVideos(peer, offset);
+        if (id !== requestId.current) return;
         dispatch({ type: "page", videos: page.videos, nextOffset: page.nextOffset });
       } catch (err) {
+        if (id !== requestId.current) return;
         const parsed = parseTelegramError(err);
-        setError(parsed);
-        dispatch({ type: "error" });
+        if (!offset) {
+          setError(parsed);
+          dispatch({ type: "error" });
+        } else {
+          toast.error(userMessage(parsed));
+        }
       } finally {
-        setLoadingMore(false);
+        if (id === requestId.current) setLoadingMore(false);
       }
     },
     [port, peer],
@@ -63,14 +86,18 @@ export function VideosTab({ peerId }: { peerId: string }) {
   useEffect(() => {
     if (!port) return;
     let cancelled = false;
-    const urls: string[] = [];
     for (const v of state.items) {
       if (thumbs[v.msgId]) continue;
       void port.getVideoThumb(v.document).then((blob) => {
         if (cancelled || !blob) return;
         const url = URL.createObjectURL(blob);
-        urls.push(url);
-        setThumbs((t) => ({ ...t, [v.msgId]: url }));
+        setThumbs((t) => {
+          if (t[v.msgId]) {
+            URL.revokeObjectURL(url);
+            return t;
+          }
+          return { ...t, [v.msgId]: url };
+        });
       });
     }
     return () => {
@@ -78,6 +105,12 @@ export function VideosTab({ peerId }: { peerId: string }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.items, port]);
+
+  useEffect(() => {
+    return () => {
+      for (const url of Object.values(thumbsRef.current)) URL.revokeObjectURL(url);
+    };
+  }, []);
 
   useEffect(() => {
     const root = scroller.current;
@@ -132,6 +165,7 @@ export function VideosTab({ peerId }: { peerId: string }) {
       await loadPage();
     } catch (err) {
       setError(parseTelegramError(err));
+      toast.error(errorMessage(err));
     }
   }
 
@@ -169,11 +203,17 @@ export function VideosTab({ peerId }: { peerId: string }) {
         </div>
         {error?.code === "private_chat" ? (
           <div className="px-1">
-            <p className="text-sm text-muted text-pretty">
-              This chat is private or you are not a participant.
-            </p>
+            <p className="text-sm text-muted text-pretty">{userMessage(error)}</p>
             <Button className="mt-3" onClick={() => void join()}>
               Join
+            </Button>
+          </div>
+        ) : null}
+        {error && error.code !== "private_chat" && state.items.length === 0 ? (
+          <div className="px-1">
+            <p className="text-sm text-danger text-pretty">{userMessage(error)}</p>
+            <Button className="mt-3" variant="outline" onClick={() => void loadPage()}>
+              Retry
             </Button>
           </div>
         ) : null}

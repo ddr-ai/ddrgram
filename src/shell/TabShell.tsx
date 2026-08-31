@@ -61,6 +61,8 @@ function TabLink({
       aria-label={children}
       to={to}
       params={params}
+      activeProps={{ "aria-selected": true, "aria-current": "page" }}
+      inactiveProps={{ "aria-selected": false }}
       className={cn(
         "mx-1 flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-xl py-2 text-xs font-medium text-muted",
         "transition-[transform,box-shadow,background-color,color] duration-[var(--motion-quick)] ease-[var(--ease-out)]",

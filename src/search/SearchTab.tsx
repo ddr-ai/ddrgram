@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { formatCount, hueFromId, initials } from "@/lib/format";
 import { parseTelegramLink } from "@/parse/telegramLink";
 import { stashSearchHit } from "./searchHits";
-import { parseTelegramError } from "@/telegram/errors";
+import { parseTelegramError, userMessage } from "@/telegram/errors";
 import { useTelegram } from "@/telegram/TelegramProvider";
 import type { SearchHit } from "@/telegram/types";
 import { toast } from "@/ui/Toast";
@@ -89,9 +89,9 @@ export function SearchTab() {
         if (!offset) {
           setHits([]);
           setNextOffset(null);
-          setError(parsedErr.message);
+          setError(userMessage(parsedErr));
         } else {
-          toast.error(parsedErr.message);
+          toast.error(userMessage(parsedErr));
         }
       } finally {
         if (id === seq.current) {
@@ -176,7 +176,7 @@ export function SearchTab() {
         toast("Join request sent — pending approval");
         return;
       }
-      toast.error(parsedErr.message);
+      toast.error(userMessage(parsedErr));
     }
   }
 

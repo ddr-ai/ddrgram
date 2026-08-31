@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { saveBlobToDownloads } from "@/files/saveToDownloads";
 import { formatBytes } from "@/lib/format";
 import { listOtherlist } from "@/stores/otherStore";
-import { AppError, parseTelegramError } from "@/telegram/errors";
+import { AppError, errorMessage, parseTelegramError, userMessage } from "@/telegram/errors";
 import { useTelegram } from "@/telegram/TelegramProvider";
 import type { FileItem, FileKind, WatchlistItem } from "@/telegram/types";
 import { toast } from "@/ui/Toast";
@@ -22,7 +22,7 @@ import { FilePreview } from "./FilePreview";
 type ListState = {
   items: FileItem[];
   nextOffset: string | null;
-  status: "idle" | "loading" | "empty";
+  status: "idle" | "loading" | "empty" | "error";
 };
 
 function emptyList(): ListState {
@@ -37,7 +37,9 @@ function reduceList(
     | { type: "page"; files: FileItem[]; nextOffset: string | null },
 ): ListState {
   if (action.type === "reset") return { items: [], nextOffset: null, status: "loading" };
-  if (action.type === "error") return { ...state, status: state.items.length ? "idle" : "empty" };
+  if (action.type === "error") {
+    return { ...state, status: state.items.length ? "idle" : "error" };
+  }
   const seen = new Set(state.items.map((f) => `${f.kind}:${f.msgId}`));
   const merged = [
     ...state.items,
@@ -76,16 +78,28 @@ export function FilesTab({
   const [preview, setPreview] = useState<FileItem | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
+  const requestId = useRef(0);
 
   useEffect(() => {
+    let cancelled = false;
+    requestId.current += 1;
+    dispatch({ type: "reset" });
+    setError(null);
+    setPeer(null);
+    setPreview(null);
     void listOtherlist().then((list) => {
+      if (cancelled) return;
       setPeer(list.find((x) => x.peerId === peerId) ?? null);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [peerId]);
 
   const loadPage = useCallback(
     async (offset?: string) => {
       if (!port || !peer) return;
+      const id = requestId.current;
       if (!offset) {
         dispatch({ type: "reset" });
         setError(null);
@@ -94,13 +108,19 @@ export function FilesTab({
       }
       try {
         const page = await port.searchFiles(peer, offset);
+        if (id !== requestId.current) return;
         dispatch({ type: "page", files: page.files, nextOffset: page.nextOffset });
       } catch (err) {
+        if (id !== requestId.current) return;
         const parsed = parseTelegramError(err);
-        setError(parsed);
-        dispatch({ type: "error" });
+        if (!offset) {
+          setError(parsed);
+          dispatch({ type: "error" });
+        } else {
+          toast.error(userMessage(parsed));
+        }
       } finally {
-        setLoadingMore(false);
+        if (id === requestId.current) setLoadingMore(false);
       }
     },
     [port, peer],
@@ -136,7 +156,7 @@ export function FilesTab({
       saveFile(blob, file.name);
       toast.success(`Saved ${file.name} to Downloads`);
     } catch (err) {
-      toast.error(parseTelegramError(err).message || "Download failed");
+      toast.error(errorMessage(err));
     } finally {
       setProgress((p) => {
         const next = { ...p };
@@ -170,9 +190,15 @@ export function FilesTab({
           Tap a file to open it. Save puts a copy in this device’s Downloads folder.
         </p>
         {error?.code === "private_chat" ? (
-          <p className="text-sm text-muted text-pretty">
-            This chat is private or you are not a participant.
-          </p>
+          <p className="text-sm text-muted text-pretty">{userMessage(error)}</p>
+        ) : null}
+        {error && error.code !== "private_chat" && state.items.length === 0 ? (
+          <div>
+            <p className="text-sm text-danger text-pretty">{userMessage(error)}</p>
+            <Button className="mt-3" variant="outline" onClick={() => void loadPage()}>
+              Retry
+            </Button>
+          </div>
         ) : null}
         {state.status === "empty" ? (
           <p className="text-sm text-muted">No downloadable files in this channel/group.</p>

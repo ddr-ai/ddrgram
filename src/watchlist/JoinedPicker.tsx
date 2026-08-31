@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { hueFromId, initials } from "@/lib/format";
 import { addToOtherlist, listOtherlist } from "@/stores/otherStore";
 import { addToWatchlist, listWatchlist } from "@/stores/watchlistStore";
-import { parseTelegramError } from "@/telegram/errors";
+import { errorMessage } from "@/telegram/errors";
 import { useTelegram } from "@/telegram/TelegramProvider";
 import type { JoinedChat, WatchlistItem } from "@/telegram/types";
 import { toast } from "@/ui/Toast";
@@ -45,7 +45,7 @@ export function JoinedPicker({
         setChats(page.chats);
         setAdded(new Set(list.map((x) => x.peerId)));
       } catch (err) {
-        toast.error(parseTelegramError(err).message);
+        toast.error(errorMessage(err));
       } finally {
         if (!cancelled) setBusy(false);
       }
