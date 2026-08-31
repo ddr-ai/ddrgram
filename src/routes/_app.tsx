@@ -1,5 +1,6 @@
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { AppErrorComponent } from "@/lib/error-component";
 import { AppFrame } from "@/shell/AppFrame";
 import { Splash } from "@/shell/Splash";
 import { useTelegram } from "@/telegram/TelegramProvider";
@@ -7,6 +8,7 @@ import { useTelegram } from "@/telegram/TelegramProvider";
 export const Route = createFileRoute("/_app")({
   ssr: false,
   component: AppLayout,
+  errorComponent: AppErrorComponent,
 });
 
 function AppLayout() {
