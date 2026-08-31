@@ -4,6 +4,47 @@ import "fake-indexeddb/auto";
 import { afterEach, beforeEach } from "vitest";
 import { deleteDatabase } from "@/stores/db";
 
+function memoryStorage(): Storage {
+  const store = new Map<string, string>();
+  return {
+    get length() {
+      return store.size;
+    },
+    clear() {
+      store.clear();
+    },
+    getItem(key) {
+      return store.has(key) ? store.get(key)! : null;
+    },
+    key(index) {
+      return [...store.keys()][index] ?? null;
+    },
+    removeItem(key) {
+      store.delete(key);
+    },
+    setItem(key, value) {
+      store.set(key, String(value));
+    },
+  };
+}
+
+function ensureStorage(name: "localStorage" | "sessionStorage") {
+  try {
+    const current = globalThis[name];
+    current.setItem("__probe", "1");
+    current.removeItem("__probe");
+  } catch {
+    const storage = memoryStorage();
+    Object.defineProperty(globalThis, name, { configurable: true, value: storage });
+    if (typeof window !== "undefined") {
+      Object.defineProperty(window, name, { configurable: true, value: storage });
+    }
+  }
+}
+
+ensureStorage("localStorage");
+ensureStorage("sessionStorage");
+
 beforeEach(async () => {
   await deleteDatabase();
   try {

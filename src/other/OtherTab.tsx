@@ -9,7 +9,7 @@ import {
   listOtherlist,
   removeFromOtherlist,
 } from "@/stores/otherStore";
-import { parseTelegramError } from "@/telegram/errors";
+import { errorMessage } from "@/telegram/errors";
 import { useTelegram } from "@/telegram/TelegramProvider";
 import type { WatchlistItem } from "@/telegram/types";
 import { toast } from "@/ui/Toast";
@@ -41,7 +41,7 @@ export function OtherTab() {
       await port.leave(item);
       toast("Left chat");
     } catch (err) {
-      toast.error(parseTelegramError(err).message);
+      toast.error(errorMessage(err));
     }
   }
 
