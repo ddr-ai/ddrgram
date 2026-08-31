@@ -24,6 +24,52 @@ export class AppError extends Error {
   }
 }
 
+const RPC_CODE = /^[A-Z][A-Z0-9_]{2,}$/;
+
+export function userMessage(err: AppError): string {
+  switch (err.code) {
+    case "not_configured":
+      return "Telegram API credentials are missing.";
+    case "offline":
+      return "You are offline. Retry when you reconnect.";
+    case "invalid_code":
+      return "Invalid code.";
+    case "code_expired":
+      return "Code expired.";
+    case "password_needed":
+      return "Two-step password required.";
+    case "flood_wait": {
+      const seconds = err.waitSeconds ?? 0;
+      return seconds > 0
+        ? `Wait ${seconds}s before trying again.`
+        : "Too many attempts. Try again shortly.";
+    }
+    case "session_revoked":
+      return "Telegram signed this session out. Sign in again.";
+    case "invalid_invite":
+      return "That invite link is invalid or expired.";
+    case "private_chat":
+      return "This chat is private or you are not a participant.";
+    case "join_pending":
+      return "Join request sent — pending approval.";
+    case "frozen":
+      return "This Telegram account is restricted right now.";
+    case "download_failed":
+      return "Download failed. Try again.";
+    default: {
+      const raw = err.message.trim();
+      if (!raw || raw === "unknown" || RPC_CODE.test(raw)) {
+        return "Something went wrong. Try again.";
+      }
+      return raw;
+    }
+  }
+}
+
+export function errorMessage(err: unknown): string {
+  return userMessage(parseTelegramError(err));
+}
+
 export function parseTelegramError(err: unknown): AppError {
   if (err instanceof AppError) return err;
 
