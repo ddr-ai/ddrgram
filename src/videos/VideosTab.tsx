@@ -27,9 +27,13 @@ export function VideosTab({ peerId }: { peerId: string }) {
   const sentinel = useRef<HTMLDivElement>(null);
   const thumbsRef = useRef<Record<number, string>>({});
   const requestId = useRef(0);
+  const nextOffsetRef = useRef<string | null>(null);
+  const loadingMoreRef = useRef(false);
   const playerOpen = currentMsgId != null;
   const grid = useGridSize();
   thumbsRef.current = thumbs;
+  nextOffsetRef.current = state.nextOffset;
+  loadingMoreRef.current = loadingMore;
 
   useEffect(() => {
     let cancelled = false;
@@ -86,24 +90,43 @@ export function VideosTab({ peerId }: { peerId: string }) {
   useEffect(() => {
     if (!port) return;
     let cancelled = false;
-    for (const v of state.items) {
-      if (thumbs[v.msgId]) continue;
-      void port.getVideoThumb(v.document).then((blob) => {
-        if (cancelled || !blob) return;
-        const url = URL.createObjectURL(blob);
-        setThumbs((t) => {
-          if (t[v.msgId]) {
-            URL.revokeObjectURL(url);
-            return t;
-          }
-          return { ...t, [v.msgId]: url };
-        });
-      });
-    }
+    const queue = state.items.filter((v) => !thumbsRef.current[v.msgId]);
+    let running = 0;
+    const pump = () => {
+      while (!cancelled && running < 3 && queue.length > 0) {
+        const v = queue.shift()!;
+        running += 1;
+        void port
+          .getVideoThumb(v.document)
+          .then((blob) => {
+            if (cancelled || !blob) return;
+            let url: string;
+            try {
+              url = URL.createObjectURL(blob);
+            } catch {
+              return;
+            }
+            setThumbs((t) => {
+              if (t[v.msgId]) {
+                URL.revokeObjectURL(url);
+                return t;
+              }
+              return { ...t, [v.msgId]: url };
+            });
+          })
+          .catch(() => {
+            // thumbs are best-effort
+          })
+          .finally(() => {
+            running -= 1;
+            if (!cancelled) pump();
+          });
+      }
+    };
+    pump();
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.items, port]);
 
   useEffect(() => {
@@ -118,15 +141,20 @@ export function VideosTab({ peerId }: { peerId: string }) {
     if (!root || !el) return;
     const io = new IntersectionObserver(
       (entries) => {
-        if (entries.some((e) => e.isIntersecting) && state.nextOffset && !loadingMore) {
-          void loadPage(state.nextOffset);
+        if (
+          entries.some((e) => e.isIntersecting) &&
+          nextOffsetRef.current &&
+          !loadingMoreRef.current
+        ) {
+          loadingMoreRef.current = true;
+          void loadPage(nextOffsetRef.current);
         }
       },
       { root, threshold: 0.1 },
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [state.nextOffset, loadingMore, loadPage]);
+  }, [loadPage]);
 
   useEffect(() => {
     if (playerOpen) return;
