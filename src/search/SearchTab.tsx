@@ -28,6 +28,8 @@ export function SearchTab() {
   const nextOffsetRef = useRef<string | null>(null);
   const loadingMoreRef = useRef(false);
   const videoCounts = usePeerVideoCounts(port, hits);
+  const hitsRef = useRef(hits);
+  hitsRef.current = hits;
   nextOffsetRef.current = nextOffset;
   loadingMoreRef.current = loadingMore;
 
@@ -77,12 +79,23 @@ export function SearchTab() {
           }
         }
         if (id !== seq.current) return;
-        setHits((list) => {
-          if (!offset) return pageHits;
-          const seen = new Set(list.map((h) => h.peerId));
-          return [...list, ...pageHits.filter((h) => !seen.has(h.peerId))];
-        });
-        setNextOffset(pageNext);
+        const valid = pageHits.filter((h) => h && h.peerId);
+        if (!offset) {
+          setHits(valid);
+          setNextOffset(pageNext);
+        } else {
+          const seen = new Set(hitsRef.current.map((h) => h.peerId));
+          const extra = valid.filter((h) => !seen.has(h.peerId));
+          if (extra.length === 0) {
+            setNextOffset(null);
+          } else {
+            setHits((list) => {
+              const have = new Set(list.map((h) => h.peerId));
+              return [...list, ...extra.filter((h) => !have.has(h.peerId))];
+            });
+            setNextOffset(pageNext);
+          }
+        }
       } catch (err) {
         if (id !== seq.current) return;
         const parsedErr = parseTelegramError(err);
