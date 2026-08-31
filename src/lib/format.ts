@@ -26,8 +26,11 @@ export function formatCount(n?: number): string {
   return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}m`;
 }
 
-export function initials(title: string): string {
-  const parts = title.trim().split(/\s+/).filter(Boolean);
+export function initials(title: string | null | undefined): string {
+  const parts = String(title ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
   return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
@@ -63,8 +66,9 @@ export function dayKey(unixSec: number): string {
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
-export function hueFromId(id: string): number {
+export function hueFromId(id: string | null | undefined): number {
+  const raw = String(id ?? "");
   let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < raw.length; i++) h = (h * 31 + raw.charCodeAt(i)) >>> 0;
   return 198 + (h % 28);
 }

@@ -25,18 +25,21 @@ export function reduceVideoList(
     case "error":
       return { ...state, status: "error" };
     case "page": {
+      const videos = Array.isArray(action.videos) ? action.videos : [];
       const seen = new Set(state.items.map((v) => v.msgId));
       const merged = [...state.items];
-      for (const v of action.videos) {
-        if (!seen.has(v.msgId)) {
-          seen.add(v.msgId);
-          merged.push(v);
-        }
+      let added = 0;
+      for (const v of videos) {
+        if (!v || v.msgId == null || seen.has(v.msgId)) continue;
+        seen.add(v.msgId);
+        merged.push(v);
+        added += 1;
       }
-      merged.sort((a, b) => b.date - a.date || b.msgId - a.msgId);
+      merged.sort((a, b) => (b.date ?? 0) - (a.date ?? 0) || b.msgId - a.msgId);
+      const nextOffset = added === 0 ? null : action.nextOffset;
       const status =
-        merged.length === 0 && !action.nextOffset ? "empty" : "idle";
-      return { items: merged, nextOffset: action.nextOffset, status };
+        merged.length === 0 && !nextOffset ? "empty" : "idle";
+      return { items: merged, nextOffset, status };
     }
     default:
       return state;
