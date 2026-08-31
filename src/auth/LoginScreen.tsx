@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AppError, parseTelegramError } from "@/telegram/errors";
+import { AppError, parseTelegramError, userMessage } from "@/telegram/errors";
 import type { TelegramPort } from "@/telegram/port";
 
 type Step = "phone" | "code" | "password" | "email" | "email_code" | "captcha";
@@ -31,19 +31,22 @@ export function LoginScreen({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [waitSeconds, setWaitSeconds] = useState<number | null>(null);
+  const waiting = waitSeconds != null && waitSeconds > 0;
+
+  useEffect(() => {
+    if (!waiting) return;
+    const id = window.setTimeout(() => {
+      setWaitSeconds((seconds) => (seconds == null || seconds <= 1 ? null : seconds - 1));
+    }, 1000);
+    return () => window.clearTimeout(id);
+  }, [waiting, waitSeconds]);
 
   function showErr(err: unknown) {
     const parsed = parseTelegramError(err);
     if (parsed.code === "flood_wait") {
-      setWaitSeconds(parsed.waitSeconds ?? 0);
-      setError(`Wait ${parsed.waitSeconds ?? 0}s before trying again.`);
-      return;
+      setWaitSeconds(Math.max(parsed.waitSeconds ?? 0, 0) || null);
     }
-    if (parsed.code === "invalid_code" || parsed.code === "code_expired") {
-      setError(parsed.code === "code_expired" ? "Code expired." : "Invalid code.");
-      return;
-    }
-    setError(parsed.message || "Something went wrong.");
+    setError(userMessage(parsed));
   }
 
   async function sendCode() {
@@ -267,8 +270,8 @@ export function LoginScreen({
             onChange={(e) => setPhone(e.target.value)}
           />
           {error ? <p className="text-sm text-danger">{error}</p> : null}
-          <Button type="submit" disabled={busy || !phone.trim() || waitSeconds != null || !port}>
-            Send code
+          <Button type="submit" disabled={busy || !phone.trim() || waiting || !port}>
+            {waiting ? `Wait ${waitSeconds}s` : "Send code"}
           </Button>
           {onResetCredentials ? (
             <Button
@@ -305,8 +308,13 @@ export function LoginScreen({
           <Button type="submit" data-testid="sign-in" disabled={busy || !code.trim()}>
             Sign in
           </Button>
-          <Button type="button" variant="ghost" disabled={busy} onClick={() => void sendCode()}>
-            Resend
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={busy || waiting}
+            onClick={() => void sendCode()}
+          >
+            {waiting ? `Wait ${waitSeconds}s` : "Resend"}
           </Button>
           <Button type="button" variant="ghost" onClick={cancelExtra}>
             Cancel
