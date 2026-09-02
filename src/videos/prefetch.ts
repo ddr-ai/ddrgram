@@ -8,8 +8,8 @@ import type { TelegramPort } from "@/telegram/port";
 import type { WatchlistItem } from "@/telegram/types";
 import { toast } from "@/ui/Toast";
 
-export const PREFETCH_CAP = 50;
-const CONCURRENCY = 2;
+export const PREFETCH_CAP = 4;
+const CONCURRENCY = 1;
 const HIDDEN_PAUSE_MS = 5 * 60_000;
 const STORAGE_TOAST = "storage full, dropped old cache";
 

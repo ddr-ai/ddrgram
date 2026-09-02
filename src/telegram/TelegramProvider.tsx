@@ -19,8 +19,7 @@ import {
 } from "../stores/sessionStore";
 import { clearOtherlist } from "../stores/otherStore";
 import { clearWatchlist } from "../stores/watchlistStore";
-import { flushOfflineQueue, syncWatchlist } from "../watchlist/syncClient";
-import { startPrefetchForWatchlist } from "../videos/prefetch";
+import { flushOfflineQueue, hydrateWatchlist } from "../watchlist/syncClient";
 
 type Status = "booting" | "needs_config" | "anon" | "ready";
 
@@ -132,21 +131,21 @@ export function TelegramProvider({
     if (status !== "ready" || !me) return;
     let cancelled = false;
     void (async () => {
-      const items = await syncWatchlist(me.id);
-      if (cancelled) return;
-      await flushOfflineQueue(me.id);
-      if (cancelled || !port) return;
-      void startPrefetchForWatchlist(items, port);
+      await hydrateWatchlist(me.id);
     })();
     const onOnline = () => {
-      void flushOfflineQueue(me.id);
+      void (async () => {
+        await flushOfflineQueue(me.id);
+        if (cancelled) return;
+        await hydrateWatchlist(me.id);
+      })();
     };
     window.addEventListener("online", onOnline);
     return () => {
       cancelled = true;
       window.removeEventListener("online", onOnline);
     };
-  }, [status, me, port]);
+  }, [status, me]);
 
   const saveCredentials = useCallback(async (apiId: number, apiHash: string) => {
     await saveApiCredentials({ apiId, apiHash });

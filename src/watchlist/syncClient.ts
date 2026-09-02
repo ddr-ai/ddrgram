@@ -1,12 +1,9 @@
-import { addToWatchlist, listWatchlist } from "@/stores/watchlistStore";
+import { listWatchlist, replaceWatchlist } from "@/stores/watchlistStore";
 import type { WatchlistItem } from "@/telegram/types";
-import { toast } from "@/ui/Toast";
 import { defaultCloudApi, type CloudWatchlistApi } from "./cloudApi";
 import { enqueueOffline, loadOfflineQueue, saveOfflineQueue } from "./offlineQueue";
-import { mergeWatchlists, toCloudItem } from "./syncLogic";
+import { toCloudItem } from "./syncLogic";
 import type { CloudWatchlistItem } from "./types";
-
-const SYNC_TOAST = "watchlist will sync when online";
 
 async function withCloud(
   userId: string,
@@ -19,35 +16,59 @@ async function withCloud(
     await run(api);
   } catch {
     await onFail();
-    toast(SYNC_TOAST);
   }
 }
 
-export async function syncWatchlist(
+/** Load the watchlist from the single cloud database. Local IndexedDB is only a cache. */
+export async function hydrateWatchlist(
   userId: string,
   api: CloudWatchlistApi = defaultCloudApi,
 ): Promise<WatchlistItem[]> {
   if (!userId) return listWatchlist();
+  await flushOfflineQueue(userId, api);
+
   let cloud: CloudWatchlistItem[] = [];
   try {
     cloud = await api.list(userId);
   } catch {
-    toast(SYNC_TOAST);
     return listWatchlist();
   }
+
   const local = await listWatchlist();
-  const { localWrites, cloudUpserts } = mergeWatchlists(local, cloud);
-  for (const item of localWrites) {
-    await addToWatchlist(item);
+  if (cloud.length === 0) {
+    for (const item of local) {
+      await withCloud(
+        userId,
+        (cloudApi) => cloudApi.upsert(userId, toCloudItem(item)),
+        () => enqueueOffline({ type: "upsert", item: toCloudItem(item) }),
+        api,
+      );
+    }
+    return local;
   }
-  for (const item of cloudUpserts) {
-    await withCloud(
-      userId,
-      (cloudApi) => cloudApi.upsert(userId, item),
-      () => enqueueOffline({ type: "upsert", item }),
-      api,
-    );
+
+  const queued = await loadOfflineQueue();
+  const pendingRemoves = new Set(
+    queued.filter((op) => op.type === "remove").map((op) => op.peerId),
+  );
+  const pendingUpserts = queued.filter((op) => op.type === "upsert");
+  const localByPeer = new Map(local.map((row) => [row.peerId, row]));
+  const byPeer = new Map<string, WatchlistItem>();
+  for (const row of cloud) {
+    if (pendingRemoves.has(row.peerId)) continue;
+    byPeer.set(row.peerId, {
+      ...row,
+      photoBlob: localByPeer.get(row.peerId)?.photoBlob,
+    });
   }
+  for (const op of pendingUpserts) {
+    if (pendingRemoves.has(op.item.peerId)) continue;
+    byPeer.set(op.item.peerId, {
+      ...op.item,
+      photoBlob: localByPeer.get(op.item.peerId)?.photoBlob,
+    });
+  }
+  await replaceWatchlist([...byPeer.values()]);
   return listWatchlist();
 }
 
