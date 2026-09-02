@@ -36,7 +36,10 @@ export function reduceVideoList(
         added += 1;
       }
       merged.sort((a, b) => (b.date ?? 0) - (a.date ?? 0) || b.msgId - a.msgId);
-      const nextOffset = added === 0 ? null : action.nextOffset;
+      const stuck =
+        added === 0 &&
+        (action.nextOffset == null || action.nextOffset === state.nextOffset);
+      const nextOffset = stuck ? null : action.nextOffset;
       const status =
         merged.length === 0 && !nextOffset ? "empty" : "idle";
       return { items: merged, nextOffset, status };
