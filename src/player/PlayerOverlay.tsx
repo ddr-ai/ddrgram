@@ -1,7 +1,7 @@
 import { ChevronLeft, Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { neighborMsgIds, revokeObjectUrl } from "./playerIndex";
+import { nearbyMsgIds, neighborMsgIds, revokeObjectUrl } from "./playerIndex";
 import { getCachedVideo, putCachedVideoWithEviction } from "@/stores/videoCacheStore";
 import { errorMessage } from "@/telegram/errors";
 import { useTelegram } from "@/telegram/TelegramProvider";
@@ -70,9 +70,12 @@ export function PlayerOverlay({
           return url;
         });
         setProgress(1);
-        const { prev, next } = neighborMsgIds(items, current.msgId);
-        void prefetch(prev);
-        void prefetch(next);
+        void (async () => {
+          for (const id of nearbyMsgIds(items, current.msgId, 1, 2)) {
+            if (cancelled) return;
+            await prefetch(id);
+          }
+        })();
       } catch (err) {
         if (!cancelled) setError(errorMessage(err));
       } finally {

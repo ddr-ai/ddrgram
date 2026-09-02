@@ -11,6 +11,7 @@ import { AppError, errorMessage, parseTelegramError, userMessage } from "@/teleg
 import { useTelegram } from "@/telegram/TelegramProvider";
 import type { WatchlistItem } from "@/telegram/types";
 import { toast } from "@/ui/Toast";
+import { fetchAllVideoPages } from "./loadCatalog";
 import { emptyVideoList, reduceVideoList } from "./videoList";
 
 export function VideosTab({ peerId }: { peerId: string }) {
@@ -22,18 +23,13 @@ export function VideosTab({ peerId }: { peerId: string }) {
   const [state, dispatch] = useReducer(reduceVideoList, undefined, emptyVideoList);
   const [error, setError] = useState<AppError | null>(null);
   const [thumbs, setThumbs] = useState<Record<number, string>>({});
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadingAll, setLoadingAll] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
-  const sentinel = useRef<HTMLDivElement>(null);
   const thumbsRef = useRef<Record<number, string>>({});
   const requestId = useRef(0);
-  const nextOffsetRef = useRef<string | null>(null);
-  const loadingMoreRef = useRef(false);
   const playerOpen = currentMsgId != null;
   const grid = useGridSize();
   thumbsRef.current = thumbs;
-  nextOffsetRef.current = state.nextOffset;
-  loadingMoreRef.current = loadingMore;
 
   useEffect(() => {
     let cancelled = false;
@@ -53,39 +49,35 @@ export function VideosTab({ peerId }: { peerId: string }) {
     };
   }, [peerId]);
 
-  const loadPage = useCallback(
-    async (offset?: string) => {
-      if (!port || !peer) return;
-      const id = requestId.current;
-      if (!offset) {
-        dispatch({ type: "reset" });
-        setError(null);
-      } else {
-        setLoadingMore(true);
+  const loadAll = useCallback(async () => {
+    if (!port || !peer) return;
+    const id = ++requestId.current;
+    dispatch({ type: "reset" });
+    setError(null);
+    setLoadingAll(true);
+    try {
+      const result = await fetchAllVideoPages({
+        search: (offset) => port.searchVideos(peer, offset),
+        onPage: (videos, nextOffset) => {
+          if (id !== requestId.current) return;
+          dispatch({ type: "page", videos, nextOffset });
+        },
+        isCancelled: () => id !== requestId.current,
+      });
+      if (id !== requestId.current) return;
+      if (result.error) {
+        setError(result.error);
+        if (result.failedOnFirstPage) dispatch({ type: "error" });
+        else toast.error(userMessage(result.error));
       }
-      try {
-        const page = await port.searchVideos(peer, offset);
-        if (id !== requestId.current) return;
-        dispatch({ type: "page", videos: page.videos, nextOffset: page.nextOffset });
-      } catch (err) {
-        if (id !== requestId.current) return;
-        const parsed = parseTelegramError(err);
-        if (!offset) {
-          setError(parsed);
-          dispatch({ type: "error" });
-        } else {
-          toast.error(userMessage(parsed));
-        }
-      } finally {
-        if (id === requestId.current) setLoadingMore(false);
-      }
-    },
-    [port, peer],
-  );
+    } finally {
+      if (id === requestId.current) setLoadingAll(false);
+    }
+  }, [port, peer]);
 
   useEffect(() => {
-    if (peer) void loadPage();
-  }, [peer, loadPage]);
+    if (peer) void loadAll();
+  }, [peer, loadAll]);
 
   useEffect(() => {
     if (!port) return;
@@ -136,27 +128,6 @@ export function VideosTab({ peerId }: { peerId: string }) {
   }, []);
 
   useEffect(() => {
-    const root = scroller.current;
-    const el = sentinel.current;
-    if (!root || !el) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (
-          entries.some((e) => e.isIntersecting) &&
-          nextOffsetRef.current &&
-          !loadingMoreRef.current
-        ) {
-          loadingMoreRef.current = true;
-          void loadPage(nextOffsetRef.current);
-        }
-      },
-      { root, threshold: 0.1 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [loadPage]);
-
-  useEffect(() => {
     if (playerOpen) return;
     const el = scroller.current;
     if (!el) return;
@@ -190,7 +161,7 @@ export function VideosTab({ peerId }: { peerId: string }) {
     try {
       if (peer.username) await port.joinByUsername(peer.username);
       else await port.joinChannel(peer);
-      await loadPage();
+      await loadAll();
     } catch (err) {
       setError(parseTelegramError(err));
       toast.error(errorMessage(err));
@@ -240,16 +211,21 @@ export function VideosTab({ peerId }: { peerId: string }) {
         {error && error.code !== "private_chat" && state.items.length === 0 ? (
           <div className="px-1">
             <p className="text-sm text-danger text-pretty">{userMessage(error)}</p>
-            <Button className="mt-3" variant="outline" onClick={() => void loadPage()}>
+            <Button className="mt-3" variant="outline" onClick={() => void loadAll()}>
               Retry
             </Button>
           </div>
         ) : null}
-        {state.status === "empty" ? (
+        {state.status === "empty" && !loadingAll ? (
           <p className="px-1 text-sm text-muted">No videos in this channel/group.</p>
         ) : null}
-        {state.status === "loading" ? (
+        {state.status === "loading" || (loadingAll && state.items.length === 0) ? (
           <p className="px-1 text-sm text-muted">Loading videos…</p>
+        ) : null}
+        {loadingAll && state.items.length > 0 ? (
+          <p className="px-1 text-sm text-muted tabular-nums">
+            Loading all videos… {state.items.length}
+          </p>
         ) : null}
         <div
           className="video-grid"
@@ -281,8 +257,7 @@ export function VideosTab({ peerId }: { peerId: string }) {
             </button>
           ))}
         </div>
-        <div ref={sentinel} className="h-8" />
-        {loadingMore ? <p className="py-2 text-center text-xs text-muted">Loading more…</p> : null}
+
       </div>
       {playerOpen && peer ? (
         <PlayerOverlay
