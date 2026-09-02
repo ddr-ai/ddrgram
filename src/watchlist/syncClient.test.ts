@@ -4,7 +4,7 @@ import { putCachedVideo, getCachedVideo } from "@/stores/videoCacheStore";
 import { addToWatchlist, listWatchlist, removeFromWatchlist } from "@/stores/watchlistStore";
 import type { WatchlistItem } from "@/telegram/types";
 import { createMemoryCloudApi } from "./cloudApi";
-import { pushRemove, syncWatchlist } from "./syncClient";
+import { hydrateWatchlist, pushRemove } from "./syncClient";
 import { toCloudItem } from "./syncLogic";
 
 const local = (over: Partial<WatchlistItem> = {}): WatchlistItem => ({
@@ -17,15 +17,15 @@ const local = (over: Partial<WatchlistItem> = {}): WatchlistItem => ({
   ...over,
 });
 
-describe("syncWatchlist", () => {
+describe("hydrateWatchlist", () => {
   beforeEach(async () => {
     await deleteDatabase();
   });
 
-  it("local-only row is upserted to cloud", async () => {
+  it("local-only row is upserted to cloud when cloud is empty", async () => {
     await addToWatchlist(local());
     const api = createMemoryCloudApi();
-    await syncWatchlist("u", api);
+    await hydrateWatchlist("u", api);
     expect(await api.list("u")).toHaveLength(1);
     expect((await api.list("u"))[0]?.peerId).toBe("1");
   });
@@ -33,17 +33,40 @@ describe("syncWatchlist", () => {
   it("cloud-only row appears locally", async () => {
     const api = createMemoryCloudApi();
     await api.upsert("u", toCloudItem(local()));
-    await syncWatchlist("u", api);
+    await hydrateWatchlist("u", api);
     expect(await listWatchlist()).toHaveLength(1);
+  });
+
+  it("non-empty cloud replaces local cache", async () => {
+    await addToWatchlist(local({ peerId: "1", title: "Local only" }));
+    const api = createMemoryCloudApi();
+    await api.upsert("u", toCloudItem(local({ peerId: "2", title: "From cloud" })));
+    await hydrateWatchlist("u", api);
+    const list = await listWatchlist();
+    expect(list.map((row) => row.peerId)).toEqual(["2"]);
+    expect(await api.list("u")).toHaveLength(1);
   });
 
   it("duplicate peerId does not double", async () => {
     await addToWatchlist(local());
     const api = createMemoryCloudApi();
     await api.upsert("u", toCloudItem(local({ title: "Cats" })));
-    await syncWatchlist("u", api);
+    await hydrateWatchlist("u", api);
     expect(await listWatchlist()).toHaveLength(1);
     expect(await api.list("u")).toHaveLength(1);
+  });
+
+  it("keeps local cache when cloud is unreachable", async () => {
+    await addToWatchlist(local());
+    const api = createMemoryCloudApi();
+    const failing: typeof api = {
+      ...api,
+      list: async () => {
+        throw new Error("offline");
+      },
+    };
+    expect(await hydrateWatchlist("u", failing)).toHaveLength(1);
+    expect(await listWatchlist()).toHaveLength(1);
   });
 
   it("remove calls cloud remove; local empty; does not touch video cache", async () => {

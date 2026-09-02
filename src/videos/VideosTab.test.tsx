@@ -103,6 +103,21 @@ describe("VideosTab", () => {
     });
   });
 
+  it("loads every page without waiting to scroll", async () => {
+    const searchVideos = vi.fn(async (_peer: unknown, offset?: string) => {
+      if (!offset) {
+        return { videos: [video(3), video(2)], nextOffset: "2" };
+      }
+      return { videos: [video(1)], nextOffset: null };
+    });
+    const port = createMockPort({ searchVideos });
+    renderVideos(port);
+    await waitFor(() => {
+      expect(document.querySelectorAll("[data-msgid]").length).toBe(3);
+    });
+    expect(searchVideos).toHaveBeenCalledTimes(2);
+  });
+
   it("plus and minus resize the grid and persist the chosen size", async () => {
     const user = userEvent.setup();
     const port = createMockPort({

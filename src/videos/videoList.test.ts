@@ -27,4 +27,30 @@ describe("reduceVideoList", () => {
     });
     expect(s.status).toBe("empty");
   });
+
+  it("keeps paging when a page has no new videos but a new offset", () => {
+    const s = reduceVideoList(emptyVideoList(), {
+      type: "page",
+      videos: [],
+      nextOffset: "9",
+    });
+    expect(s.nextOffset).toBe("9");
+    expect(s.status).toBe("idle");
+  });
+
+  it("does not throw on a malformed page and stops pagination when nothing new arrives", () => {
+    const a = { msgId: 3, peerId: "p", date: 3, sizeBytes: 1, document: null };
+    const loaded = reduceVideoList(emptyVideoList(), {
+      type: "page",
+      videos: [a],
+      nextOffset: "3",
+    });
+    const junk = reduceVideoList(loaded, {
+      type: "page",
+      videos: undefined as unknown as [],
+      nextOffset: "3",
+    });
+    expect(junk.items).toEqual(loaded.items);
+    expect(junk.nextOffset).toBeNull();
+  });
 });

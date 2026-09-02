@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { formatCount, hueFromId, initials } from "@/lib/format";
 import {
+  WATCHLIST_CHANGED,
   listWatchlist,
   removeFromWatchlist,
   updateWatchlistMuted,
@@ -36,6 +37,11 @@ export function WatchlistTab() {
 
   useEffect(() => {
     void reload();
+    const onChange = () => {
+      void reload();
+    };
+    window.addEventListener(WATCHLIST_CHANGED, onChange);
+    return () => window.removeEventListener(WATCHLIST_CHANGED, onChange);
   }, [reload]);
 
   async function remove(item: WatchlistItem) {
